@@ -1,0 +1,30 @@
+[package]
+name = "heimdall"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "heimdall"
+path = "src/main.rs"
+
+[dependencies]
+tokio = { version = "1.44.1", default-features = false, features = ["macros", "rt-multi-thread"] }
+axum = { version = "0.8.1" }
+tower = { version = "0.5.2" }
+tower-http = { version = "0.6.2", features = ["trace", "cors"] }
+hyper = { version = "1.6.0" }
+
+sqlx = { version = "0.8.3", default-features = false, features = ["macros", "postgres", "uuid", "chrono"] }
+uuid = { version = "1.16.0", features = ["serde", "v4"] }
+chrono = { version = "0.4.40", features = ["serde"] }
+
+serde = { version = "1.0.219", features = ["derive"] }
+serde_json = { version = "1.0.140" }
+
+tracing = { version = "0.1.41" }
+tracing-subscriber = { version = "0.3.19", features = ["env-filter", "fmt", "json"] }
+
+config = { version = "0.15.11", features = ["yaml"] }
