@@ -8,6 +8,8 @@
 -- Google Zanzibar powers permissions for many Google products like Google Drive, YouTube, etc.
 -- All timestamps are stored in UTC timezone.
 
+-- NOTE: Maybe lets follow the distributed datastore layer approach to simplify our application service so that its compatible with distributed datastores. If we try and define the sharding and replication logic inside the application, it will become complex, also we wont have a vendor lock-in. Atleast for the inital version lets depend on the datalayer approach.
+
 -- Extensions necesary for the project
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";     -- For generating UUIDs
 CREATE EXTENSION IF NOT EXISTS "btree_gist";    -- For indexing jsonb fields
@@ -32,10 +34,10 @@ CREATE TYPE operation_type AS ENUM (
 );
 
 CREATE TYPE transaction_status AS ENUM (
-    'PENDING',
-    'COMMITTED',
-    'FAILED', 
-    'REPLICATED'
+    'pending',
+    'committed',
+    'failed', 
+    'replicated'
 );
 
 -- =================================================================================================
