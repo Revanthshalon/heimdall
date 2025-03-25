@@ -39,7 +39,7 @@ CREATE TYPE transaction_status AS ENUM (
 );
 
 -- =================================================================================================
--- Core Configuration Tables
+-- Core Configuration Tables (Ideal tables for replication)
 -- =================================================================================================
 
 -- Namespaces define object types in the system
@@ -126,7 +126,7 @@ CREATE TABLE IF NOT EXISTS relation_rules (
 );
 
 -- =================================================================================================
--- Core Permission Data Tables
+-- Core Permission Data Tables (Ideal table for sharding)
 -- =================================================================================================
 
 -- Relationship tuples store the actual permission relationships in the system
@@ -136,6 +136,7 @@ CREATE TABLE IF NOT EXISTS relation_rules (
 --   namespace_id: Which namespace the object belongs to
 --   object_id: The specific object being accessed
 --   relation: The permission type being granted
+--   shard_id: database shard contains the relationship_tuple
 --   subject_type: The type of entity receiving permission (user, group, etc.)
 --   subject_id: The specific entity receiving permission
 --   userset_namespace: For tuple-to-userset rules, which namespace to check
@@ -149,6 +150,7 @@ CREATE TABLE IF NOT EXISTS relationship_tuples (
     namespace_id VARCHAR(64) NOT NULL,
     object_id VARCHAR(255) NOT NULL, -- the object whose permissions are being set (e.g., document_id)
     relation VARCHAR(64) NOT NULL, -- the permission being granted (e.g., 'viewer')
+    shard_id INT NOT NULL,
 
     -- Subject can be a user or object (group, role, etc.)
     subject_type VARCHAR(64) NOT NULL, -- 'user', 'group', 'role', etc.
@@ -168,9 +170,10 @@ CREATE TABLE IF NOT EXISTS relationship_tuples (
 
     -- Unique constraints to prevent duplicates
     UNIQUE (namespace_id, object_id, relation, subject_type, subject_id, COALESCE(userset_namespace, ''), COALESCE(userset_relation, ''))
-) PARTITION BY LIST (namespace_id);
+) PARTITION BY LIST (namespace_id, shard_id);
 
 -- Creating indices for common access patterns
+CREATE INDEX IF NOT EXISTS idx_tuples_shard ON relationship_tuples (namespace_id, shard_id, object_id);
 CREATE INDEX IF NOT EXISTS idx_tuples_object ON relationship_tuples (namespace_id, object_id, relation);
 CREATE INDEX IF NOT EXISTS idx_tuples_subject ON relationship_tuples (subject_type, subject_id);
 CREATE INDEX IF NOT EXISTS idx_tuples_userset ON relationship_tuples (userset_namespace, userset_relation) WHERE userset_namespace IS NOT NULL;
@@ -198,7 +201,7 @@ CREATE TABLE IF NOT EXISTS zookies (
     shard_id INT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     expired_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP + INTERVAL '7 days'
-);
+) PARTITION BY LIST (shard_id);
 
 CREATE INDEX IF NOT EXISTS idx_zookies_version ON zookies (version);
 CREATE INDEX IF NOT EXISTS idx_zookies_expires ON zookies (expired_at);
@@ -221,6 +224,7 @@ CREATE INDEX IF NOT EXISTS idx_zookies_expires ON zookies (expired_at);
 --   status: Current state of this transaction (pending, committed, etc.)
 CREATE TABLE IF NOT EXISTS transaction_log (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    shard_id INT NOT NULL,
     timestamp TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     version_number BIGINT NOT NULL,
     operation operation_type NOT NULL,
@@ -239,6 +243,7 @@ CREATE TABLE IF NOT EXISTS transaction_log (
     status transaction_status NOT NULL DEFAULT 'COMMITTED' 
 );
 
+CREATE INDEX IF NOT EXISTS idx_transaction_log_shard ON transaction_log (shard_id, namespace_id);
 CREATE INDEX IF NOT EXISTS idx_transaction_log_version ON transaction_log (version_number);
 CREATE INDEX IF NOT EXISTS idx_transaction_log_status ON transaction_log (status, version_number);
 CREATE INDEX IF NOT EXISTS idx_transaction_log_namespace_object ON transaction_log (namespace_id, object_id);
