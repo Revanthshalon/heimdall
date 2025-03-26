@@ -12,6 +12,7 @@ name = "heimdall"
 path = "src/main.rs"
 
 [dependencies]
+clap = { version = "4.5.32", features = ["derive"] }
 tokio = { version = "1.44.1", default-features = false, features = ["macros", "rt-multi-thread"] }
 axum = { version = "0.8.1" }
 tower = { version = "0.5.2" }
@@ -29,3 +30,4 @@ tracing = { version = "0.1.41" }
 tracing-subscriber = { version = "0.3.19", features = ["env-filter", "fmt", "json"] }
 
 config = { version = "0.15.11", features = ["yaml"] }
+justid-toolkit = { git = "https://github.com/Revanthshalon/justid-toolkit.git", branch = "master"}
