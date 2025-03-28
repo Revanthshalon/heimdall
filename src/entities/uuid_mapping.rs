@@ -11,9 +11,7 @@ use uuid::Uuid;
 /// * `id` - The UUID value
 /// * `string_representation` - String representation of the UUID
 #[derive(Debug, Serialize, Deserialize)]
-pub struct UuidMapping {
-    /// The UUID identifier
+pub struct UuidMappings {
     pub id: Uuid,
-    /// String representation of the UUID
     pub string_representation: String,
 }

@@ -1,6 +1,6 @@
 #![allow(unused)]
 
-use super::relationtuple::{RelationTuple, Subject};
+use super::relation_tuple::{RelationTuples, Subject};
 
 /// Represents different types of traversal operations in the authorization system.
 ///
@@ -45,9 +45,9 @@ impl std::fmt::Display for TraversalType {
 #[derive(Debug)]
 pub struct TraversalResult {
     /// The source relation tuple where traversal began.
-    pub from: RelationTuple,
+    pub from: RelationTuples,
     /// The destination relation tuple where traversal ended.
-    pub to: RelationTuple,
+    pub to: RelationTuples,
     /// The method used for traversal.
     pub via: TraversalType,
     /// Indicates whether the traversal was successful in finding a path.

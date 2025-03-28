@@ -8,39 +8,14 @@ use uuid::Uuid;
 /// relationships within a permission system, typically following the format:
 /// "namespace:object#relation@subject"
 #[derive(Debug, Serialize, Deserialize)]
-pub struct RelationTuple {
-    /// Unique identifier for the shard this relationship belongs to
+pub struct RelationTuples {
     pub shard_id: Uuid,
-
-    /// Network ID for multi-tenancy - identifies the tenant
     pub nid: Uuid,
-
-    /// The namespace (category/domain) of the object
     pub namespace: String,
-
-    /// The specific object identifier
     pub object: Uuid,
-
-    /// The type of relationship (e.g., "owner", "viewer", "editor")
     pub relation: String,
-
-    /// The subject (user or group) that has the relation to the object
     pub subject: Subject,
-
-    /// Timestamp when this relation was committed/created
     pub commit_time: DateTime<Utc>,
-}
-
-impl std::fmt::Display for RelationTuple {
-    /// Formats the RelationTuple as a string in the canonical format:
-    /// "namespace:object#relation@subject"
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}:{}#{}@{}",
-            self.namespace, self.object, self.relation, self.subject
-        )
-    }
 }
 
 /// Represents either a direct user id or reference to a group.
@@ -50,19 +25,10 @@ impl std::fmt::Display for RelationTuple {
 /// - A reference to a group/set of users defined by another relation
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Subject {
-    /// Direct Subject representing a specific user by their UUID
     Id(Uuid),
-
-    /// Subject set representing group membership
-    /// References another relation that defines a collection of subjects
     Set {
-        /// The namespace of the group
         namespace: String,
-
-        /// The object identifier of the group
         object: Uuid,
-
-        /// The relation type within the group (e.g., "member")
         relation: String,
     },
 }
