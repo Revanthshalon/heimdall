@@ -1,5 +1,8 @@
-/// Module that contains domain-specific types and logic
-mod domain;
+mod config;
+mod dtos;
+mod entities;
+mod errors;
+mod repositories;
 
 /// Initiates and runs the Heimdall service
 ///
