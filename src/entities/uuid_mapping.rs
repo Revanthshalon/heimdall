@@ -10,7 +10,7 @@ use uuid::Uuid;
 ///
 /// * `id` - The UUID value
 /// * `string_representation` - String representation of the UUID
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
 pub struct UuidMappings {
     pub id: Uuid,
     pub string_representation: String,

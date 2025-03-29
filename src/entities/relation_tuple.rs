@@ -7,7 +7,7 @@ use uuid::Uuid;
 /// A RelationTuple is the core data structure that defines access control
 /// relationships within a permission system, typically following the format:
 /// "namespace:object#relation@subject"
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, sqlx::FromRow)]
 pub struct RelationTuples {
     pub shard_id: Uuid,
     pub nid: Uuid,
