@@ -24,6 +24,8 @@ pub trait UuidMappingRepositoryTrait: Send + Sync {
 
 #[async_trait::async_trait]
 impl UuidMappingRepositoryTrait for UuidMappingRepository {
+    // This function only looks for existing mappings of strings to uuids and creates uuids for
+    // mappings that does not exist
     async fn map_string_to_uuids(&self, strings: &[String]) -> HeimdallResult<Vec<Uuid>> {
         if strings.is_empty() {
             return Ok(Vec::new());
@@ -59,6 +61,8 @@ impl UuidMappingRepositoryTrait for UuidMappingRepository {
         Ok(results)
     }
 
+    // This function only looks for existing mappings of strings to uuids and returns an error of
+    // not present
     async fn map_string_to_uuids_readonly(&self, strings: &[String]) -> HeimdallResult<Vec<Uuid>> {
         if strings.is_empty() {
             return Ok(Vec::new());
@@ -81,7 +85,28 @@ impl UuidMappingRepositoryTrait for UuidMappingRepository {
         Ok(results)
     }
 
+    // This function looks for existing mappings of uuids to string representations and returns an
+    // error of not present
     async fn map_uuid_to_strings(&self, uuids: &[Uuid]) -> HeimdallResult<Vec<String>> {
-        todo!()
+        if uuids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let mut results = Vec::with_capacity(uuids.len());
+
+        for id in uuids {
+            let query_result_option: Option<String> = sqlx::query_scalar(
+                "SELECT string_representation FROM heimdall_uuid_mappings WHERE id = $1",
+            )
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await?;
+
+            match query_result_option {
+                Some(string_representation) => results.push(string_representation),
+                None => return Err(HeimdallError::NoStringForUuid(*id)),
+            }
+        }
+        Ok(results)
     }
 }
