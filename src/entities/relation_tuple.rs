@@ -24,8 +24,11 @@ pub struct RelationTuples {
 /// - A direct user identifier (UUID)
 /// - A reference to a group/set of users defined by another relation
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(untagged)]
 pub enum Subject {
-    Id(Uuid),
+    Direct {
+        id: Uuid,
+    },
     Set {
         namespace: String,
         object: Uuid,
@@ -39,7 +42,9 @@ impl std::fmt::Display for Subject {
     /// - For sets: "namespace#object.relation"
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Subject::Id(id) => write!(f, "{}", id),
+            Subject::Direct { id } => {
+                write!(f, "id: {}", id)
+            }
             Subject::Set {
                 namespace,
                 object,
@@ -68,7 +73,7 @@ impl Subject {
     /// `true` if the subjects are equal, `false` otherwise
     pub fn equals(&self, other: &Subject) -> bool {
         match (self, other) {
-            (Subject::Id(id1), Subject::Id(id2)) => id1 == id2,
+            (Subject::Direct { id: id1 }, Subject::Direct { id: id2 }) => id1 == id2,
             (
                 Subject::Set {
                     namespace: ns1,
@@ -94,7 +99,7 @@ impl Subject {
     /// - For sets: generates a v5 UUID based on namespace and relation
     pub fn unique_id(&self) -> Uuid {
         match self {
-            Subject::Id(id) => *id,
+            Subject::Direct { id } => *id,
             Subject::Set {
                 namespace,
                 object: _,
