@@ -1,15 +1,13 @@
-#![allow(unused)]
-
 use std::collections::HashMap;
 
 use sqlx::{Pool, Postgres};
-use tracing::{Level, trace};
+use tracing::Level;
 use uuid::Uuid;
 
-use crate::{
-    entities::uuid_mapping::UuidMappings,
-    errors::{HeimdallError, HeimdallResult},
-};
+use super::model::UuidMappings;
+use super::traits::UuidMappingRepositoryTrait;
+use super::utils::build_insert_uuids;
+use crate::errors::HeimdallResult;
 
 pub struct UuidMappingRepository {
     pool: Pool<Postgres>,
@@ -19,36 +17,17 @@ impl UuidMappingRepository {
     pub fn new(pool: Pool<Postgres>) -> Self {
         Self { pool }
     }
-}
 
-#[async_trait::async_trait]
-pub trait UuidMappingRepositoryTrait: Send + Sync {
-    async fn map_string_to_uuids(
-        &self,
-        nid: &Uuid,
-        strings: &[String],
-    ) -> HeimdallResult<Vec<Uuid>>;
-    async fn map_string_to_uuids_readonly(
-        &self,
-        nid: &Uuid,
-        strings: &[String],
-    ) -> HeimdallResult<Vec<Uuid>>;
-    async fn map_uuid_to_strings(&self, uuids: &[Uuid]) -> HeimdallResult<Vec<String>>;
-}
-
-impl UuidMappingRepository {
     pub fn table_name(&self) -> String {
         String::from("heimdall_uuid_mappings")
     }
-}
 
-impl UuidMappingRepository {
     pub async fn batch_from_uuids(&self, uuids: &[Uuid]) -> HeimdallResult<Vec<String>> {
         if uuids.is_empty() {
             return Ok(Vec::new());
         }
 
-        trace!("looking up UUIDS");
+        tracing::trace!("looking up UUIDS");
 
         let mut id_idx: HashMap<Uuid, Vec<usize>> = HashMap::with_capacity(uuids.len());
 
@@ -137,7 +116,7 @@ impl UuidMappingRepositoryTrait for UuidMappingRepository {
         Ok(uuids)
     }
 
-    // NOTE: This function does not make calls to database
+    // note: this function does not make calls to database
     async fn map_string_to_uuids_readonly(
         &self,
         nid: &Uuid,
@@ -150,37 +129,11 @@ impl UuidMappingRepositoryTrait for UuidMappingRepository {
         Ok(result)
     }
 
-    // This function looks for existing mappings of uuids to string representations and returns an
+    // this function looks for existing mappings of uuids to string representations and returns an
     // error of not present
     async fn map_uuid_to_strings(&self, uuids: &[Uuid]) -> HeimdallResult<Vec<String>> {
         let span = tracing::span!(Level::INFO, "map_uuid_to_strings");
         let _enter = span.enter();
         self.batch_from_uuids(uuids).await
     }
-}
-
-fn build_insert_uuids(uuid_mappings: &[UuidMappings]) -> (String, Vec<String>) {
-    if uuid_mappings.is_empty() {
-        return (String::new(), Vec::new());
-    }
-
-    let mut query_builder = String::new();
-    let mut args: Vec<String> = Vec::with_capacity(uuid_mappings.len() * 2);
-
-    query_builder
-        .push_str("INSERT INTO heimdall_uuid_mappings (id, string_representation) VALUES ");
-
-    for (i, uuid_mapping) in uuid_mappings.iter().enumerate() {
-        if i > 0 {
-            query_builder.push_str(", ");
-        }
-        let param_placeholder = format!("(${}, ${})", (i * 2) + 1, (i * 2) + 2);
-        query_builder.push_str(&param_placeholder);
-        args.push(uuid_mapping.id.to_string());
-        args.push(uuid_mapping.string_representation.clone())
-    }
-
-    query_builder.push_str("ON CONFLICT (id) DO NOTHING");
-
-    (query_builder, args)
 }

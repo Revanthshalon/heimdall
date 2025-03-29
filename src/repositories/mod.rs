@@ -2,9 +2,9 @@
 
 use std::sync::Arc;
 
-use relation_tuple::{RelationTupleRepository, RelationTupleRepositoryTrait};
+use relation_tuple::{repository::RelationTupleRepository, traits::RelationTupleRepositoryTrait};
 use sqlx::{Pool, Postgres};
-use uuid_mapping::{UuidMappingRepository, UuidMappingRepositoryTrait};
+use uuid_mapping::{repository::UuidMappingRepository, traits::UuidMappingRepositoryTrait};
 
 pub mod relation_tuple;
 pub mod uuid_mapping;

@@ -2,6 +2,8 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+// NOTE: Internal representation of `RelationTuple`
+
 /// Represents a permission relationship between a subject and an object.
 ///
 /// A RelationTuple is the core data structure that defines access control

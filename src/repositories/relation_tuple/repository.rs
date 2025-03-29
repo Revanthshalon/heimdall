@@ -1,45 +1,24 @@
-#![allow(unused)]
-
-// WARN: None of the repository methods are implemented yet
-use sqlx::{Pool, Postgres};
-
 use crate::{
     dtos::relation_tuple::{RelationTuple, RelationTupleQuery},
     errors::HeimdallResult,
 };
 
+use super::traits::RelationTupleRepositoryTrait;
+
+use sqlx::{Pool, Postgres};
+use tracing::Level;
+
 pub struct RelationTupleRepository {
     pool: Pool<Postgres>,
-}
-
-#[async_trait::async_trait]
-pub trait RelationTupleRepositoryTrait: Send + Sync {
-    async fn get_relation_tuples(
-        &self,
-        query: &Option<RelationTupleQuery>,
-    ) -> HeimdallResult<Vec<RelationTuple>>;
-    async fn relation_tuples_exists(
-        &self,
-        query: &Option<RelationTupleQuery>,
-    ) -> HeimdallResult<bool>;
-    async fn create_relation_tuples(&self, relation_tuples: &[RelationTuple])
-    -> HeimdallResult<()>;
-    async fn delete_relation_tuples(&self, relation_tuples: &[RelationTuple])
-    -> HeimdallResult<()>;
-    async fn delete_all_relation_tuples(
-        &self,
-        query: &Option<RelationTupleQuery>,
-    ) -> HeimdallResult<()>;
-    async fn transact_relation_tuples(
-        &self,
-        insert: &[RelationTuple],
-        delete: &[RelationTuple],
-    ) -> HeimdallResult<()>;
 }
 
 impl RelationTupleRepository {
     pub fn new(pool: Pool<Postgres>) -> Self {
         Self { pool }
+    }
+
+    pub fn table_name(&self) -> String {
+        String::from("heimdall_relationtuples")
     }
 }
 
@@ -49,6 +28,8 @@ impl RelationTupleRepositoryTrait for RelationTupleRepository {
         &self,
         _query: &Option<RelationTupleQuery>,
     ) -> HeimdallResult<Vec<RelationTuple>> {
+        let span = tracing::span!(Level::INFO, "get_relation_tuples");
+        let _enter = span.enter();
         todo!()
     }
 
