@@ -38,7 +38,7 @@ pub trait RelationTupleRepositoryTrait: Send + Sync {
 }
 
 impl RelationTupleRepository {
-    pub fn new(pool: PgPool) -> Self {
+    pub fn new(pool: Pool<Postgres>) -> Self {
         Self { pool }
     }
 }
