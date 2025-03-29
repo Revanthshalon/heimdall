@@ -3,6 +3,7 @@
 use std::collections::HashMap;
 
 use sqlx::{Pool, Postgres};
+use tracing::{Level, trace};
 use uuid::Uuid;
 
 use crate::{
@@ -46,6 +47,8 @@ impl UuidMappingRepository {
         if uuids.is_empty() {
             return Ok(Vec::new());
         }
+
+        trace!("looking up UUIDS");
 
         let mut id_idx: HashMap<Uuid, Vec<usize>> = HashMap::with_capacity(uuids.len());
 
@@ -94,7 +97,16 @@ impl UuidMappingRepositoryTrait for UuidMappingRepository {
             return Ok(Vec::new());
         }
 
+        let span = tracing::span!(
+            Level::INFO,
+            "map_string_to_uuids",
+            string_count = strings.len()
+        );
+        let _enter = span.enter();
+
         let uuids = self.map_string_to_uuids_readonly(nid, strings).await?;
+
+        tracing::debug!(strings= ?strings, uuids= ?uuids, "adding UUID mappings");
 
         let mut mappings = Vec::with_capacity(strings.len());
 
@@ -107,6 +119,8 @@ impl UuidMappingRepositoryTrait for UuidMappingRepository {
 
         mappings.sort_by(|a, b| a.id.cmp(&b.id));
         mappings.dedup_by(|a, b| a.id == b.id);
+
+        span.record("mappings_length", mappings.len());
 
         let chunk_size = 1000;
         for chunk in mappings.chunks(chunk_size) {
@@ -139,6 +153,8 @@ impl UuidMappingRepositoryTrait for UuidMappingRepository {
     // This function looks for existing mappings of uuids to string representations and returns an
     // error of not present
     async fn map_uuid_to_strings(&self, uuids: &[Uuid]) -> HeimdallResult<Vec<String>> {
+        let span = tracing::span!(Level::INFO, "map_uuid_to_strings");
+        let _enter = span.enter();
         self.batch_from_uuids(uuids).await
     }
 }
