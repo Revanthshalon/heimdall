@@ -1,5 +1,7 @@
 #![allow(unused)]
 
+mod traversal;
+
 use uuid::Uuid;
 
 #[derive(Debug)]
@@ -10,6 +12,7 @@ pub enum HeimdallError {
     NoUuidForString(String),
     NoStringForUuid(Uuid),
     InvalidRelationTuple(String),
+    Traversal(traversal::Error),
 }
 
 impl std::fmt::Display for HeimdallError {
@@ -25,6 +28,7 @@ impl std::fmt::Display for HeimdallError {
                 write!(f, "No string mapping found for UUID: {}", e)
             }
             HeimdallError::InvalidRelationTuple(e) => write!(f, "Invalid relation tuple: {}", e),
+            HeimdallError::Traversal(e) => write!(f, "Traversal Error: {}", e),
         }
     }
 }
@@ -38,6 +42,12 @@ impl From<sqlx::Error> for HeimdallError {
 impl From<uuid::Error> for HeimdallError {
     fn from(value: uuid::Error) -> Self {
         HeimdallError::UuidParse(value)
+    }
+}
+
+impl From<traversal::Error> for HeimdallError {
+    fn from(value: traversal::Error) -> Self {
+        HeimdallError::Traversal(value)
     }
 }
 
