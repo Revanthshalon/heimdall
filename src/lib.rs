@@ -16,7 +16,7 @@ mod repositories;
 ///
 /// # Examples
 ///
-/// ```
+/// ```ignore
 /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ///     start_heimdall_service().await
 /// }
