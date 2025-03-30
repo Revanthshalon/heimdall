@@ -4,8 +4,8 @@ use sqlx::{Pool, Postgres};
 use tracing::Level;
 use uuid::Uuid;
 
+use super::helpers::build_insert_uuids;
 use super::traits::UuidMappingRepositoryTrait;
-use super::utils::build_insert_uuids;
 use crate::dtos::uuid_mapping::UuidMappings;
 use crate::errors::HeimdallResult;
 
@@ -16,10 +16,6 @@ pub struct UuidMappingRepository {
 impl UuidMappingRepository {
     pub fn new(pool: Pool<Postgres>) -> Self {
         Self { pool }
-    }
-
-    pub fn table_name(&self) -> String {
-        String::from("heimdall_uuid_mappings")
     }
 
     pub async fn batch_from_uuids(&self, uuids: &[Uuid]) -> HeimdallResult<Vec<String>> {

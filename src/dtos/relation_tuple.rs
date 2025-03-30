@@ -1,7 +1,5 @@
 #![allow(unused)]
 
-use std::fmt::Display;
-
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::{Row, postgres::PgRow};
@@ -60,14 +58,14 @@ pub enum Subject {
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct SubjectId {
-    id: Uuid,
+    pub id: Uuid,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct SubjectSet {
-    namespace: String,
-    object: Uuid,
-    relation: String,
+    pub namespace: String,
+    pub object: Uuid,
+    pub relation: String,
 }
 
 impl SubjectId {
@@ -148,4 +146,15 @@ pub struct RelationTuple {
     pub object: Uuid,
     pub relation: String,
     pub subject: Subject,
+}
+
+impl From<RelationTuples> for RelationTuple {
+    fn from(value: RelationTuples) -> Self {
+        RelationTuple {
+            namespace: value.namespace,
+            object: value.object,
+            relation: value.relation,
+            subject: value.subject,
+        }
+    }
 }

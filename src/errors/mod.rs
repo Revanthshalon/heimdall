@@ -13,6 +13,7 @@ pub enum HeimdallError {
     NoStringForUuid(Uuid),
     InvalidRelationTuple(String),
     Traversal(traversal::Error),
+    MalformedInput,
 }
 
 impl std::fmt::Display for HeimdallError {
@@ -29,6 +30,7 @@ impl std::fmt::Display for HeimdallError {
             }
             HeimdallError::InvalidRelationTuple(e) => write!(f, "Invalid relation tuple: {}", e),
             HeimdallError::Traversal(e) => write!(f, "Traversal Error: {}", e),
+            HeimdallError::MalformedInput => write!(f, "Malformed Input"),
         }
     }
 }
