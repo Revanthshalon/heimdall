@@ -1,4 +1,4 @@
-use super::model::UuidMappings;
+use crate::dtos::uuid_mapping::UuidMappings;
 
 pub fn build_insert_uuids(uuid_mappings: &[UuidMappings]) -> (String, Vec<String>) {
     if uuid_mappings.is_empty() {

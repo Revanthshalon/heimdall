@@ -4,9 +4,9 @@ use sqlx::{Pool, Postgres};
 use tracing::Level;
 use uuid::Uuid;
 
-use super::model::UuidMappings;
 use super::traits::UuidMappingRepositoryTrait;
 use super::utils::build_insert_uuids;
+use crate::dtos::uuid_mapping::UuidMappings;
 use crate::errors::HeimdallResult;
 
 pub struct UuidMappingRepository {
