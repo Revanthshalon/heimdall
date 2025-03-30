@@ -1,6 +1,5 @@
 mod config;
 mod dtos;
-mod entities;
 mod errors;
 mod repositories;
 
