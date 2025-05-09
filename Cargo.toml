@@ -1,0 +1,27 @@
+[package]
+name = "heimdall"
+version = "0.1.0"
+edition = "2024"
+authors = ["Revanth<revanthshalonraj@gmail.com>"]
+description = "A relationship-based access control (RBAC/ABAC) server that provides fine-grained permissions management"
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "heimdall"
+patht = "src/main.rs"
+
+[dependencies]
+serde = { version = "1.0.219", features = ["derive"]}
+serde_json = { version = "1.0.140" }
+tokio = { version = "1.45.0", features = ["macros", "rt-multi-thread"]}
+sqlx = { version = "0.8.5", features = ["macros", "runtime-tokio", "postgres", "uuid", "chrono", "migrate"]}
+uuid = { version = "1.16.0", features = ["serde", "v4", "v5"]}
+chrono = { version = "0.4.41", features = ["serde"]}
+
+tracing = { version = "0.1.41"}
+tracing-subscriber = { version = "0.3.19", features = ["env-filter", "fmt", "json"]}
+
+nom = { version = "8.0.0"}
+nom_locate = { version = "5.0.0"}
