@@ -90,6 +90,7 @@ impl<'a> Lexer<'a> {
                 tag("class"),
                 tag("implements"),
                 tag("related"),
+                tag("Namespace"),
                 tag("permits"),
                 tag("this"),
                 tag("ctx"),
@@ -103,6 +104,7 @@ impl<'a> Lexer<'a> {
             "permits" => Ok((rest, Token::new(TokenKind::KeywordPermits, span))),
             "this" => Ok((rest, Token::new(TokenKind::KeywordThis, span))),
             "ctx" => Ok((rest, Token::new(TokenKind::KeywordCtx, span))),
+            "Namespace" => Ok((rest, Token::new(TokenKind::KeywordNamespace, span))),
             _ => unreachable!(),
         }
     }
