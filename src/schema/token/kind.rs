@@ -13,6 +13,7 @@ pub enum TokenKind {
     KeywordPermits,
     KeywordThis,
     KeywordCtx,
+    KeywordNamespace,
 
     OperatorAnd,
     OperatorOr,
@@ -46,6 +47,7 @@ impl std::fmt::Display for TokenKind {
             Self::StringLiteral => write!(f, "StringLiteral"),
             Self::KeywordClass => write!(f, "class"),
             Self::KeywordImplements => write!(f, "implements"),
+            Self::KeywordNamespace => write!(f, "Namespace"),
             Self::KeywordRelated => write!(f, "related"),
             Self::KeywordPermits => write!(f, "permits"),
             Self::KeywordThis => write!(f, "this"),
