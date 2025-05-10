@@ -133,13 +133,18 @@ impl<'a> SchemaParser<'a> {
                 TokenKind::BraceRight => {
                     // Consume '}'
                     self.cursor.advance();
-                    break;
+                    return Ok(Some(Namespace {
+                        name: namespace_name,
+                        relation: Arc::new(relations),
+                    }));
                 }
                 TokenKind::KeywordRelated => {
-                    let related = self.parse_related()?;
-                    if let Some(relation) = related {
-                        relations.push(relation);
-                    }
+                    let related_relations = self.parse_related()?;
+                    relations.extend(related_relations);
+                }
+                TokenKind::KeywordPermits => {
+                    let permit_relations = self.parse_permits()?;
+                    relations.extend(permit_relations);
                 }
                 _ => {
                     return Err(ParserError::fatal(
@@ -152,16 +157,60 @@ impl<'a> SchemaParser<'a> {
                 }
             }
         }
-
-        let namespace = Namespace {
-            name: namespace_name,
-            relation: Arc::new(relations),
-        };
-
-        Ok(Some(namespace))
+        Err(ParserError::fatal(
+            "Unexpected end of file while parsing namespace",
+            None,
+        ))
     }
 
-    fn parse_related(&mut self) -> Result<Option<Relation>, ParserError> {
+    /// Sample
+    /// related : {
+    ///     owner: User[];
+    ///     editors: User[];
+    ///     viewers: (User|SubjectSet<Team, "members">)[];
+    ///     parent_folder: Folder[];
+    ///     confidential: boolean;
+    /// }
+    fn parse_related(&mut self) -> Result<Vec<Relation>, ParserError> {
+        // Consume 'related: {'
+        self.expect(TokenKind::KeywordRelated)?;
+        self.expect(TokenKind::OperatorColon)?;
+        self.expect(TokenKind::BraceLeft)?;
+
+        let mut relations = Vec::new();
+
+        while !self.cursor.is_at_end() {
+            let token = match self.cursor.peek() {
+                Some(token) => token,
+                None => break,
+            };
+
+            match token.kind {
+                // Consume '}'
+                TokenKind::BraceRight => {
+                    self.cursor.advance();
+                    return Ok(relations);
+                }
+                TokenKind::Identifier | TokenKind::StringLiteral => {
+                    let relation_name = token.value.clone();
+                    self.cursor.advance();
+                }
+                TokenKind::SemiColon => {
+                    self.cursor.advance();
+                }
+                _ => {
+                    return Err(ParserError::fatal(
+                        format!("Expected relation name or '}}', found {:?}", token.kind),
+                        Some(token),
+                    ));
+                }
+            }
+        }
+
+        Ok(relations)
+    }
+
+    fn parse_permits(&mut self) -> Result<Vec<Relation>, ParserError> {
         todo!()
     }
 }
