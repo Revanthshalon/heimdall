@@ -5,7 +5,12 @@ use std::sync::Arc;
 use cursor::TokenCursor;
 
 use crate::{
-    entities::schema::{Schema, namespace::Namespace, relation::Relation},
+    entities::schema::{
+        Schema,
+        namespace::Namespace,
+        relation::{AttributeType, Relation, RelationType},
+        subject::{Child, SubjectSetRewrite},
+    },
     error::ParserError,
 };
 
@@ -194,6 +199,15 @@ impl<'a> SchemaParser<'a> {
                 TokenKind::Identifier | TokenKind::StringLiteral => {
                     let relation_name = token.value.clone();
                     self.cursor.advance();
+                    self.expect(TokenKind::OperatorColon)?;
+
+                    let types = self.parse_relation_types()?;
+
+                    relations.push(Relation {
+                        name: relation_name,
+                        relation_type: Arc::new(types),
+                        subject_set_rewrite: None,
+                    });
                 }
                 TokenKind::SemiColon => {
                     self.cursor.advance();
@@ -210,7 +224,118 @@ impl<'a> SchemaParser<'a> {
         Ok(relations)
     }
 
+    fn parse_relation_types(&mut self) -> Result<Vec<RelationType>, ParserError> {
+        let token = self
+            .cursor
+            .peek()
+            .ok_or(ParserError::fatal("Unexpected end of input", None))?;
+
+        match token.kind {
+            TokenKind::Identifier => match token.value.as_ref() {
+                "boolean" => {
+                    // Consume boolean
+                    self.cursor.advance();
+
+                    if self.cursor.check(&TokenKind::SemiColon) {
+                        self.cursor.advance();
+                    }
+                    return Ok(vec![RelationType::Attribute(AttributeType::Boolean)]);
+                }
+                "string" => {
+                    // Consume string
+                    self.cursor.advance();
+
+                    if self.cursor.check(&TokenKind::SemiColon) {
+                        self.cursor.advance();
+                    }
+
+                    return Ok(vec![RelationType::Attribute(AttributeType::String)]);
+                }
+                "SubjectSet" => {
+                    // Consume Subject Set
+                    self.cursor.advance();
+                    let subject_set = self.parse_subject_set()?;
+
+                    self.expect(TokenKind::BracketLeft)?;
+                    self.expect(TokenKind::BracketRight)?;
+
+                    if self.cursor.check(&TokenKind::SemiColon) {
+                        self.cursor.advance();
+                    }
+
+                    return Ok(vec![subject_set]);
+                }
+                _ => todo!(),
+            },
+            _ => todo!(),
+        }
+        todo!()
+    }
+
+    fn parse_subject_set(&mut self) -> Result<RelationType, ParserError> {
+        self.expect(TokenKind::AngledLeft)?;
+
+        let ns_token = self.cursor.advance().ok_or(ParserError::fatal(
+            "expected identifier for subject set namespace",
+            None,
+        ))?;
+
+        if ns_token.kind.ne(&TokenKind::Identifier) {
+            return Err(ParserError::fatal(
+                "expected identifer for subject set namespace",
+                Some(ns_token),
+            ));
+        }
+
+        self.expect(TokenKind::OperatorComma)?;
+
+        let relation_token = self.cursor.advance().ok_or(ParserError::fatal(
+            "expected identifer for subject set relation",
+            None,
+        ))?;
+
+        if relation_token.kind.ne(&TokenKind::Identifier)
+            && relation_token.kind.ne(&TokenKind::StringLiteral)
+        {
+            return Err(ParserError::fatal(
+                "Expected identifier or string literal for subject set relation",
+                Some(relation_token),
+            ));
+        }
+
+        self.expect(TokenKind::AngledRight)?;
+
+        Ok(RelationType::Reference {
+            namespace: ns_token.value.clone(),
+            relation: Some(relation_token.value.clone()),
+        })
+    }
+
+    fn parse_type_union(&mut self) -> Result<Vec<RelationType>, ParserError> {
+        todo!()
+    }
+
     fn parse_permits(&mut self) -> Result<Vec<Relation>, ParserError> {
+        todo!()
+    }
+
+    fn parse_permission_expression(&mut self) -> Result<SubjectSetRewrite, ParserError> {
+        todo!()
+    }
+
+    fn parser_simple_permission_expression(&mut self) -> Result<Child, ParserError> {
+        todo!()
+    }
+
+    fn parse_property_access(&mut self) -> Result<Child, ParserError> {
+        todo!()
+    }
+
+    fn parse_tuple_to_subject_set(&mut self) -> Result<Child, ParserError> {
+        todo!()
+    }
+
+    fn parse_computed_subject_set(&mut self) -> Result<Child, ParserError> {
         todo!()
     }
 }
