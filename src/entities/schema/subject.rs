@@ -45,6 +45,9 @@ pub enum Child {
     InvertResult {
         child: Arc<Child>,
     },
+    AttributeReference {
+        relation: Arc<str>,
+    },
 }
 
 impl Clone for Child {
@@ -65,6 +68,9 @@ impl Clone for Child {
             },
             Self::InvertResult { child } => Self::InvertResult {
                 child: Arc::clone(child),
+            },
+            Self::AttributeReference { relation } => Self::AttributeReference {
+                relation: Arc::clone(relation),
             },
         }
     }
