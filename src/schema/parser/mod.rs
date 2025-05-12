@@ -405,7 +405,65 @@ impl<'a> SchemaParser<'a> {
     }
 
     fn parse_permits(&mut self) -> Result<Vec<Relation>, ParserError> {
-        todo!()
+        // Consume 'permits'
+        self.expect(TokenKind::KeywordPermits)?;
+        self.expect(TokenKind::OperatorColon)?;
+        self.expect(TokenKind::BraceLeft)?;
+
+        let mut relations = Vec::new();
+
+        while !self.cursor.is_at_end() {
+            let token = match self.cursor.peek() {
+                Some(token) => token,
+                None => break,
+            };
+
+            match token.kind {
+                TokenKind::BraceRight => {
+                    self.cursor.advance();
+                    return Ok(relations);
+                }
+                TokenKind::Identifier | TokenKind::StringLiteral => {
+                    let permission_name = token.value.clone();
+                    self.cursor.advance();
+
+                    self.expect(TokenKind::OperatorColon)?;
+                    self.expect(TokenKind::ParenLeft)?;
+                    self.expect(TokenKind::KeywordCtx)?;
+
+                    if self.cursor.check(&TokenKind::OperatorColon) {
+                        self.cursor.advance();
+                        self.expect(TokenKind::Identifier)?;
+                    }
+
+                    self.expect(TokenKind::ParenRight)?;
+                    self.expect(TokenKind::OperatorArrow)?;
+
+                    let rewrite = self.parse_permission_expression()?;
+
+                    let relation = Relation {
+                        name: permission_name,
+                        relation_type: Arc::new(Vec::new()),
+                        subject_set_rewrite: Some(Arc::new(rewrite)),
+                    };
+                    relations.push(relation);
+                }
+                TokenKind::SemiColon => {
+                    self.cursor.advance();
+                }
+                _ => {
+                    return Err(ParserError::fatal(
+                        "expected permission name or '}'",
+                        Some(token),
+                    ));
+                }
+            }
+        }
+
+        Err(ParserError::fatal(
+            "Unexpected end of input while parsing 'permits' block",
+            None,
+        ))
     }
 
     fn parse_permission_expression(&mut self) -> Result<SubjectSetRewrite, ParserError> {
