@@ -26,7 +26,7 @@ class Document implements Namespace {
   }
 
   permits: {
-    edit: (ctx) => 
+    edit: (ctx: Context) => 
       this.related.owner.includes(ctx.subject) || 
       this.related.editors.includes(ctx.subject) ||
       this.related.parent_folder.related.traverse((parent) => 
