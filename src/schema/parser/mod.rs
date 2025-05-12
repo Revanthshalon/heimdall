@@ -9,7 +9,7 @@ use crate::{
         Schema,
         namespace::Namespace,
         relation::{AttributeType, Relation, RelationType},
-        subject::{Child, SubjectSetRewrite},
+        subject::{Child, Operator, SubjectSetRewrite},
     },
     error::ParserError,
 };
@@ -17,6 +17,9 @@ use crate::{
 use super::token::{Token, kind::TokenKind};
 
 mod cursor;
+
+pub const TUPLE_TO_SUBJECT_SET_TYPE_CHECK_MAX_DEPTH: usize = 10;
+pub const EXPRESSION_NESTING_MAX_DEPTH: usize = 10;
 
 pub struct SchemaParser<'a> {
     cursor: TokenCursor<'a>,
@@ -467,6 +470,29 @@ impl<'a> SchemaParser<'a> {
     }
 
     fn parse_permission_expression(&mut self) -> Result<SubjectSetRewrite, ParserError> {
+        let mut root_operation = Operator::And;
+        let mut children = Vec::new();
+        let mut expect_expression = true;
+
+        while !self.cursor.is_at_end() {
+            let token = match self.cursor.peek() {
+                Some(token) => token,
+                None => break,
+            };
+
+            match token.kind {
+                TokenKind::ParenLeft if expect_expression => {
+                    self.cursor.advance();
+                    let child_rewrite = self.parse_permission_expression()?;
+                    children.push(Child::Rewrite {
+                        rewrite: Arc::new(child_rewrite),
+                    });
+                    expect_expression = false
+                }
+                _ => todo!(),
+            }
+        }
+
         todo!()
     }
 
