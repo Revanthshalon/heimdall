@@ -239,7 +239,7 @@ impl<'a> SchemaParser<'a> {
                     if self.cursor.check(&TokenKind::SemiColon) {
                         self.cursor.advance();
                     }
-                    return Ok(vec![RelationType::Attribute(AttributeType::Boolean)]);
+                    Ok(vec![RelationType::Attribute(AttributeType::Boolean)])
                 }
                 "string" => {
                     // Consume string
@@ -249,7 +249,7 @@ impl<'a> SchemaParser<'a> {
                         self.cursor.advance();
                     }
 
-                    return Ok(vec![RelationType::Attribute(AttributeType::String)]);
+                    Ok(vec![RelationType::Attribute(AttributeType::String)])
                 }
                 "SubjectSet" => {
                     // Consume Subject Set
@@ -263,13 +263,45 @@ impl<'a> SchemaParser<'a> {
                         self.cursor.advance();
                     }
 
-                    return Ok(vec![subject_set]);
+                    Ok(vec![subject_set])
                 }
-                _ => todo!(),
+                simple_reference => {
+                    let type_ref = RelationType::Reference {
+                        namespace: Arc::from(simple_reference),
+                        relation: None,
+                    };
+
+                    self.cursor.advance();
+
+                    self.expect(TokenKind::BracketLeft)?;
+                    self.expect(TokenKind::BracketRight)?;
+
+                    if self.cursor.check(&TokenKind::SemiColon) {
+                        self.cursor.advance();
+                    }
+
+                    Ok(vec![type_ref])
+                }
             },
-            _ => todo!(),
+            // Handles Type Union
+            TokenKind::ParenLeft => {
+                self.cursor.advance();
+                let types = self.parse_type_union()?;
+
+                self.expect(TokenKind::BracketLeft)?;
+                self.expect(TokenKind::BracketRight)?;
+
+                if self.cursor.check(&TokenKind::SemiColon) {
+                    self.cursor.advance();
+                }
+
+                Ok(types)
+            }
+            others => Err(ParserError::fatal(
+                format!("Expected type declaration, found {:?}", others),
+                Some(token),
+            )),
         }
-        todo!()
     }
 
     fn parse_subject_set(&mut self) -> Result<RelationType, ParserError> {
@@ -312,7 +344,64 @@ impl<'a> SchemaParser<'a> {
     }
 
     fn parse_type_union(&mut self) -> Result<Vec<RelationType>, ParserError> {
-        todo!()
+        let mut types = Vec::new();
+
+        loop {
+            let token = self
+                .cursor
+                .peek()
+                .ok_or(ParserError::fatal("Unexpected end of input", None))?;
+
+            match token.kind {
+                TokenKind::Identifier => {
+                    if token.value.as_ref().eq("SubjectSet") {
+                        self.cursor.advance();
+                        types.push(self.parse_subject_set()?);
+                    } else {
+                        let namespace_name = token.value.clone();
+                        self.cursor.advance();
+                        types.push(RelationType::Reference {
+                            namespace: namespace_name,
+                            relation: None,
+                        });
+                    }
+
+                    let next = self
+                        .cursor
+                        .peek()
+                        .ok_or(ParserError::fatal("Unexpected end of token", None))?;
+
+                    match next.kind {
+                        TokenKind::AngledRight => {
+                            self.cursor.advance();
+                            return Ok(types);
+                        }
+                        TokenKind::TypeUnion => {
+                            self.cursor.advance();
+                            continue;
+                        }
+                        _ => {
+                            return Err(ParserError::fatal(
+                                format!("Expected '|' or '>', found {:?}", next.kind),
+                                Some(next),
+                            ));
+                        }
+                    }
+                }
+                TokenKind::AngledRight => {
+                    self.cursor.advance();
+                    return Ok(types);
+                }
+                _ => {
+                    return Err(ParserError::fatal(
+                        format!("Expected identifer or '>', found {:?}", token.kind),
+                        Some(token),
+                    ));
+                }
+            }
+        }
+
+        Ok(types)
     }
 
     fn parse_permits(&mut self) -> Result<Vec<Relation>, ParserError> {
