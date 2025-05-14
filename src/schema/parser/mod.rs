@@ -24,7 +24,6 @@ pub const EXPRESSION_NESTING_MAX_DEPTH: usize = 10;
 pub struct SchemaParser<'a> {
     cursor: TokenCursor<'a>,
     errors: Vec<ParserError>,
-    fatal: bool,
 }
 
 impl<'a> SchemaParser<'a> {
@@ -32,24 +31,20 @@ impl<'a> SchemaParser<'a> {
         Self {
             cursor: TokenCursor::new(tokens),
             errors: Vec::new(),
-            fatal: false,
         }
     }
 
     pub fn parse(&mut self) -> Result<Schema, Vec<ParserError>> {
+        // Entry point for parsing an entire schema file
+        // Example:
+        // ```
+        // class User implements Namespace {...}
+        // class Document implements Namespace {...}
+        // ```
         let mut namespaces = Vec::new();
 
-        while !self.cursor.is_at_end() && !self.fatal {
-            match self.parse_next() {
-                Ok(Some(namespace)) => namespaces.push(namespace),
-                Ok(None) => {}
-                Err(err) => {
-                    if err.fatal {
-                        self.fatal = true;
-                    }
-                    self.errors.push(err);
-                }
-            }
+        while !self.cursor.is_at_end() {
+            todo!()
         }
 
         if !self.errors.is_empty() {
@@ -61,454 +56,457 @@ impl<'a> SchemaParser<'a> {
         })
     }
 
-    fn parse_next(&mut self) -> Result<Option<Namespace>, ParserError> {
-        let token = match self.cursor.peek() {
-            Some(token) => token,
-            None => return Ok(None),
-        };
+    //---------------------------
+    // Helper Methods
+    //---------------------------
 
-        match token.kind {
-            TokenKind::KeywordClass => self.parse_namespace(),
-            TokenKind::Error => Err(ParserError::fatal(
-                format!("Syntax error {}", token.value),
-                Some(token),
-            )),
-            _ => {
-                self.cursor.advance();
-                Ok(None)
-            }
-        }
+    /// Method takes a tokenkind as an argument and checks if the token matches the argument
+    fn check(&self, kind: TokenKind) -> bool {
+        self.cursor.check(&kind)
     }
 
-    fn add_error(&mut self, message: impl Into<String>, token: Option<&Token>, is_fatal: bool) {
-        let error = ParserError::new(message, token, is_fatal);
-        self.errors.push(error);
-        if is_fatal {
-            self.fatal = true
-        }
-    }
-
-    fn expect(&mut self, kind: TokenKind) -> Result<&'a Token, ParserError> {
-        if self.cursor.check(&kind) {
-            let token = self.cursor.advance();
-            match token {
-                Some(token) => Ok(token),
-                None => Err(ParserError::new("Unexpected EOF", token, true)),
-            }
+    /// Method takes a reference to tokenkind as argument and checks if the token matches. If it
+    /// matches then it consumes the token else returns an error
+    fn consume(&mut self, kind: TokenKind) -> Result<&Token, ParserError> {
+        if self.check(kind) {
+            Ok(self
+                .cursor
+                .advance()
+                .ok_or(ParserError::new("unexpected end of file", None))?)
         } else {
-            let token = self.cursor.peek();
-            Err(ParserError::fatal(
-                format!("expected {:?}, found {:?}", kind, token.map(|t| t.kind)),
-                token,
+            Err(ParserError::new(
+                format!("expected {:?}", kind),
+                self.cursor.peek(),
             ))
         }
     }
 
-    pub fn parse_namespace(&mut self) -> Result<Option<Namespace>, ParserError> {
-        // Consume 'class'
-        self.expect(TokenKind::KeywordClass)?;
+    fn consume_identifier(&mut self) -> Result<Arc<str>, ParserError> {
+        let token = self
+            .cursor
+            .peek()
+            .ok_or(ParserError::new("unexpected end of file", None))?;
 
-        // Get namespace name
-        let name_token = self.cursor.advance().ok_or(ParserError::fatal(
-            "Expected identifier for namespace name",
-            None,
-        ))?;
-
-        if !name_token.kind.eq(&TokenKind::Identifier) {
-            return Err(ParserError::fatal(
-                "Expected identifier for namespace name",
-                Some(name_token),
+        if token.kind.ne(&TokenKind::Identifier) {
+            return Err(ParserError::new(
+                format!("expected identifier, found {:?}", token.kind),
+                Some(token),
             ));
         }
 
-        let namespace_name = name_token.value.clone();
-
-        // Consume 'implements Namespace {'
-        self.expect(TokenKind::KeywordImplements)?;
-        self.expect(TokenKind::KeywordNamespace)?;
-        self.expect(TokenKind::BraceLeft)?;
-
-        let mut relations = Vec::new();
-
-        // Parse namespace body
-        while !self.cursor.is_at_end() {
-            let token = match self.cursor.peek() {
-                Some(token) => token,
-                None => break,
-            };
-
-            match token.kind {
-                TokenKind::BraceRight => {
-                    // Consume '}'
-                    self.cursor.advance();
-                    return Ok(Some(Namespace {
-                        name: namespace_name,
-                        relation: Arc::new(relations),
-                    }));
-                }
-                TokenKind::KeywordRelated => {
-                    let related_relations = self.parse_related()?;
-                    relations.extend(related_relations);
-                }
-                TokenKind::KeywordPermits => {
-                    let permit_relations = self.parse_permits()?;
-                    relations.extend(permit_relations);
-                }
-                _ => {
-                    return Err(ParserError::fatal(
-                        format!(
-                            "Expected 'related', 'permits' or '}}', found {:?}",
-                            token.kind
-                        ),
-                        Some(token),
-                    ));
-                }
-            }
-        }
-        Err(ParserError::fatal(
-            "Unexpected end of file while parsing namespace",
-            None,
-        ))
+        let identifier = token.value.clone();
+        self.cursor.advance();
+        Ok(identifier)
     }
 
-    /// Sample
-    /// related : {
-    ///     owner: User[];
-    ///     editors: User[];
-    ///     viewers: (User|SubjectSet<Team, "members">)[];
-    ///     parent_folder: Folder[];
-    ///     confidential: boolean;
-    /// }
-    fn parse_related(&mut self) -> Result<Vec<Relation>, ParserError> {
-        // Consume 'related: {'
-        self.expect(TokenKind::KeywordRelated)?;
-        self.expect(TokenKind::OperatorColon)?;
-        self.expect(TokenKind::BraceLeft)?;
+    //---------------------------
+    // Namespace Parsing
+    //---------------------------
+
+    fn parse_namespace(&mut self) -> Result<Namespace, ParserError> {
+        // Parses a single namespace definition
+        // Example:
+        // ```
+        // class User implements Namespace {
+        //   related: { ... }
+        //   permits: { ... }
+        // }
+        // ```
+        self.consume(TokenKind::KeywordClass)?;
+
+        let name = self.consume_identifier()?;
+
+        self.consume(TokenKind::KeywordImplements)?;
+        self.consume(TokenKind::KeywordNamespace)?;
+        self.consume(TokenKind::BraceLeft)?;
 
         let mut relations = Vec::new();
 
-        while !self.cursor.is_at_end() {
-            let token = match self.cursor.peek() {
-                Some(token) => token,
-                None => break,
-            };
-
-            match token.kind {
-                // Consume '}'
-                TokenKind::BraceRight => {
-                    self.cursor.advance();
-                    return Ok(relations);
-                }
-                TokenKind::Identifier | TokenKind::StringLiteral => {
-                    let relation_name = token.value.clone();
-                    self.cursor.advance();
-                    self.expect(TokenKind::OperatorColon)?;
-
-                    let types = self.parse_relation_types()?;
-
-                    relations.push(Relation {
-                        name: relation_name,
-                        relation_type: Arc::new(types),
-                        subject_set_rewrite: None,
-                    });
-                }
-                TokenKind::SemiColon => {
-                    self.cursor.advance();
-                }
-                _ => {
-                    return Err(ParserError::fatal(
-                        format!("Expected relation name or '}}', found {:?}", token.kind),
-                        Some(token),
-                    ));
-                }
+        while !self.cursor.is_at_end() && !self.check(TokenKind::BraceRight) {
+            if self.check(TokenKind::KeywordRelated) {
+                self.consume(TokenKind::KeywordRelated)?;
+                let related_relations = self.parse_related_block()?;
+                relations.extend(related_relations);
+            } else if self.check(TokenKind::KeywordPermits) {
+                self.consume(TokenKind::KeywordPermits)?;
+                let permits_relations = self.parse_permits_block()?;
+                relations.extend(permits_relations);
+            } else {
+                return Err(ParserError::new(
+                    "expected 'related' or 'permits' or '}'",
+                    self.cursor.peek(),
+                ));
             }
         }
+
+        self.consume(TokenKind::BraceRight)?;
+
+        Ok(Namespace::new(name, relations))
+    }
+
+    //---------------------------
+    // Related block parsing
+    //---------------------------
+
+    /// Parses a related block which defines relations and attributes
+    /// ```
+    /// related: {
+    ///     owner: User[];
+    ///     editors: (User | Team)[];
+    ///     confidential: boolean;
+    /// }
+    /// ```
+    fn parse_related_block(&mut self) -> Result<Vec<Relation>, ParserError> {
+        self.consume(TokenKind::OperatorColon)?;
+        self.consume(TokenKind::BraceLeft)?;
+
+        let mut relations = Vec::new();
+
+        while !self.cursor.is_at_end() && !self.check(TokenKind::BraceRight) {
+            if self.check(TokenKind::Identifier) || self.check(TokenKind::StringLiteral) {
+                relations.push(self.parse_relation_definitions()?);
+            } else if self.check(TokenKind::SemiColon) {
+                continue;
+            } else {
+                return Err(ParserError::new(
+                    "expected relation name",
+                    self.cursor.peek(),
+                ));
+            }
+        }
+
+        self.consume(TokenKind::BraceRight)?;
 
         Ok(relations)
     }
 
-    fn parse_relation_types(&mut self) -> Result<Vec<RelationType>, ParserError> {
-        let token = self
-            .cursor
-            .peek()
-            .ok_or(ParserError::fatal("Unexpected end of input", None))?;
+    fn parse_relation_definitions(&mut self) -> Result<Relation, ParserError> {
+        // Parses a single relation or attribute definition
+        // Example:
+        // ```
+        // owner: User[];
+        // confidential: boolean;
+        // ```
+        let name = if self.check(TokenKind::StringLiteral) {
+            let token = self
+                .cursor
+                .advance()
+                .ok_or(ParserError::new("unexpected end of file", None))?;
+            token.value.clone()
+        } else {
+            self.consume_identifier()?
+        };
 
-        match token.kind {
-            TokenKind::Identifier => match token.value.as_ref() {
-                "boolean" => {
-                    // Consume boolean
-                    self.cursor.advance();
+        self.consume(TokenKind::OperatorColon)?;
 
-                    if self.cursor.check(&TokenKind::SemiColon) {
-                        self.cursor.advance();
-                    }
-                    Ok(vec![RelationType::Attribute(AttributeType::Boolean)])
-                }
-                "string" => {
-                    // Consume string
-                    self.cursor.advance();
+        let relation_types = self.parse_relation_type()?;
 
-                    if self.cursor.check(&TokenKind::SemiColon) {
-                        self.cursor.advance();
-                    }
+        self.consume(TokenKind::SemiColon);
 
-                    Ok(vec![RelationType::Attribute(AttributeType::String)])
-                }
-                "SubjectSet" => {
-                    // Consume Subject Set
-                    self.cursor.advance();
-                    let subject_set = self.parse_subject_set()?;
-
-                    self.expect(TokenKind::BracketLeft)?;
-                    self.expect(TokenKind::BracketRight)?;
-
-                    if self.cursor.check(&TokenKind::SemiColon) {
-                        self.cursor.advance();
-                    }
-
-                    Ok(vec![subject_set])
-                }
-                simple_reference => {
-                    let type_ref = RelationType::Reference {
-                        namespace: Arc::from(simple_reference),
-                        relation: None,
-                    };
-
-                    self.cursor.advance();
-
-                    self.expect(TokenKind::BracketLeft)?;
-                    self.expect(TokenKind::BracketRight)?;
-
-                    if self.cursor.check(&TokenKind::SemiColon) {
-                        self.cursor.advance();
-                    }
-
-                    Ok(vec![type_ref])
-                }
-            },
-            // Handles Type Union
-            TokenKind::ParenLeft => {
-                self.cursor.advance();
-                let types = self.parse_type_union()?;
-
-                self.expect(TokenKind::BracketLeft)?;
-                self.expect(TokenKind::BracketRight)?;
-
-                if self.cursor.check(&TokenKind::SemiColon) {
-                    self.cursor.advance();
-                }
-
-                Ok(types)
-            }
-            others => Err(ParserError::fatal(
-                format!("Expected type declaration, found {:?}", others),
-                Some(token),
-            )),
-        }
-    }
-
-    fn parse_subject_set(&mut self) -> Result<RelationType, ParserError> {
-        self.expect(TokenKind::AngledLeft)?;
-
-        let ns_token = self.cursor.advance().ok_or(ParserError::fatal(
-            "expected identifier for subject set namespace",
-            None,
-        ))?;
-
-        if ns_token.kind.ne(&TokenKind::Identifier) {
-            return Err(ParserError::fatal(
-                "expected identifer for subject set namespace",
-                Some(ns_token),
-            ));
-        }
-
-        self.expect(TokenKind::OperatorComma)?;
-
-        let relation_token = self.cursor.advance().ok_or(ParserError::fatal(
-            "expected identifer for subject set relation",
-            None,
-        ))?;
-
-        if relation_token.kind.ne(&TokenKind::Identifier)
-            && relation_token.kind.ne(&TokenKind::StringLiteral)
-        {
-            return Err(ParserError::fatal(
-                "Expected identifier or string literal for subject set relation",
-                Some(relation_token),
-            ));
-        }
-
-        self.expect(TokenKind::AngledRight)?;
-
-        Ok(RelationType::Reference {
-            namespace: ns_token.value.clone(),
-            relation: Some(relation_token.value.clone()),
+        Ok(Relation {
+            name,
+            relation_type: Arc::new(relation_types),
+            subject_set_rewrite: None,
         })
     }
 
-    fn parse_type_union(&mut self) -> Result<Vec<RelationType>, ParserError> {
-        let mut types = Vec::new();
-
-        loop {
+    fn parse_relation_type(&mut self) -> Result<Vec<RelationType>, ParserError> {
+        // Parses the type definition for a relation
+        // Example:
+        // ```
+        // User[]                           -> Namespace Reference
+        // boolean                          -> Primitive Attribute
+        // (User | Team) []                 -> Type union
+        // SubjectSet<Team, "members">[]    -> Subject set
+        // ```
+        if self.check(TokenKind::Identifier) {
             let token = self
                 .cursor
                 .peek()
-                .ok_or(ParserError::fatal("Unexpected end of input", None))?;
+                .ok_or(ParserError::new("unexpected end of file", None))?;
 
-            match token.kind {
-                TokenKind::Identifier => {
-                    if token.value.as_ref().eq("SubjectSet") {
-                        self.cursor.advance();
-                        types.push(self.parse_subject_set()?);
-                    } else {
-                        let namespace_name = token.value.clone();
-                        self.cursor.advance();
+            match token.value.as_ref() {
+                "boolean" => {
+                    self.cursor.advance();
+                    return Ok(vec![RelationType::Attribute(AttributeType::Boolean)]);
+                }
+                "string" => {
+                    self.cursor.advance();
+                    return Ok(vec![RelationType::Attribute(AttributeType::String)]);
+                }
+                "SubjectSet" => {
+                    self.cursor.advance();
+                    return self.parse_subject_set_type();
+                }
+                _ => {
+                    // Regular namespace reference
+                    let namespace = token.value.clone();
+                    self.cursor.advance();
+
+                    // Check for array notation
+                    self.consume(TokenKind::BracketLeft)?;
+                    self.consume(TokenKind::BracketRight)?;
+
+                    return Ok(vec![RelationType::Reference {
+                        namespace,
+                        relation: None,
+                    }]);
+                }
+            }
+        } else if self.check(TokenKind::ParenLeft) {
+            // Union type like (User | Team)[]
+            return self.parse_type_union();
+        }
+
+        Err(ParserError::new(
+            "expected type definition",
+            self.cursor.peek(),
+        ))
+    }
+
+    fn parse_subject_set_type(&mut self) -> Result<Vec<RelationType>, ParserError> {
+        // Parsers a subject set type reference
+        // Example:
+        // ```
+        // SubjectSet<Team, "members">[]
+        // ```
+        self.consume(TokenKind::AngledLeft)?;
+
+        let namespace = self.consume_identifier()?;
+
+        self.consume(TokenKind::OperatorComma)?;
+
+        let relation = if self.check(TokenKind::Identifier) {
+            self.consume_identifier()?
+        } else if self.check(TokenKind::StringLiteral) {
+            let token = self
+                .cursor
+                .advance()
+                .ok_or(ParserError::new("unexpected end of file", None))?;
+            token.value.clone()
+        } else {
+            return Err(ParserError::new(
+                "expected relation name",
+                self.cursor.peek(),
+            ));
+        };
+
+        self.consume(TokenKind::AngledRight)?;
+
+        self.consume(TokenKind::BracketLeft)?;
+        self.consume(TokenKind::BracketRight)?;
+
+        Ok(vec![RelationType::Reference {
+            namespace,
+            relation: Some(relation),
+        }])
+    }
+
+    fn parse_type_union(&mut self) -> Result<Vec<RelationType>, ParserError> {
+        // Parses a type union expression
+        // Example:
+        // ```
+        // (User | Team | SubjectSet<Group, "members">)
+        // ```
+        let mut types = Vec::new();
+
+        if self.check(TokenKind::Identifier) {
+            let token = self
+                .cursor
+                .advance()
+                .ok_or(ParserError::new("unexpected end of file", None))?;
+            match token.value.as_ref() {
+                "SubjectSet" => {
+                    types.extend(self.parse_subject_set_type()?);
+                }
+                _ => {
+                    let namespace = self.consume_identifier()?;
+                    types.push(RelationType::Reference {
+                        namespace,
+                        relation: None,
+                    });
+                }
+            }
+        } else {
+            return Err(ParserError::new(
+                "expected type in union",
+                self.cursor.peek(),
+            ));
+        }
+
+        while self.check(TokenKind::TypeUnion) {
+            if self.check(TokenKind::Identifier) {
+                let token = self
+                    .cursor
+                    .advance()
+                    .ok_or(ParserError::new("unexpected end of file", None))?;
+                match token.value.as_ref() {
+                    "SubjectSet" => {
+                        types.extend(self.parse_subject_set_type()?);
+                    }
+                    _ => {
+                        let namespace = self.consume_identifier()?;
                         types.push(RelationType::Reference {
-                            namespace: namespace_name,
+                            namespace,
                             relation: None,
                         });
                     }
-
-                    let next = self
-                        .cursor
-                        .peek()
-                        .ok_or(ParserError::fatal("Unexpected end of token", None))?;
-
-                    match next.kind {
-                        TokenKind::AngledRight => {
-                            self.cursor.advance();
-                            return Ok(types);
-                        }
-                        TokenKind::TypeUnion => {
-                            self.cursor.advance();
-                            continue;
-                        }
-                        _ => {
-                            return Err(ParserError::fatal(
-                                format!("Expected '|' or '>', found {:?}", next.kind),
-                                Some(next),
-                            ));
-                        }
-                    }
                 }
-                TokenKind::AngledRight => {
-                    self.cursor.advance();
-                    return Ok(types);
-                }
-                _ => {
-                    return Err(ParserError::fatal(
-                        format!("Expected identifer or '>', found {:?}", token.kind),
-                        Some(token),
-                    ));
-                }
+            } else {
+                return Err(ParserError::new(
+                    "expected type in union",
+                    self.cursor.peek(),
+                ));
             }
         }
+
+        self.consume(TokenKind::ParenRight)?;
+
+        self.consume(TokenKind::BracketLeft)?;
+        self.consume(TokenKind::BracketRight)?;
 
         Ok(types)
     }
 
-    fn parse_permits(&mut self) -> Result<Vec<Relation>, ParserError> {
-        // Consume 'permits'
-        self.expect(TokenKind::KeywordPermits)?;
-        self.expect(TokenKind::OperatorColon)?;
-        self.expect(TokenKind::BraceLeft)?;
+    //---------------------------
+    // Permits block parsing
+    //---------------------------
+
+    fn parse_permits_block(&mut self) -> Result<Vec<Relation>, ParserError> {
+        // Entry point for parsing permission expressions
+        // Example:
+        // ```
+        // this.related.owner.includes(ctx.subject) || this.related.editors.includes(ctx.subject)
+        // ```
+        self.consume(TokenKind::OperatorColon)?;
+        self.consume(TokenKind::BraceLeft)?;
 
         let mut relations = Vec::new();
 
-        while !self.cursor.is_at_end() {
-            let token = match self.cursor.peek() {
-                Some(token) => token,
-                None => break,
-            };
-
-            match token.kind {
-                TokenKind::BraceRight => {
-                    self.cursor.advance();
-                    return Ok(relations);
-                }
-                TokenKind::Identifier | TokenKind::StringLiteral => {
-                    let permission_name = token.value.clone();
-                    self.cursor.advance();
-
-                    self.expect(TokenKind::OperatorColon)?;
-                    self.expect(TokenKind::ParenLeft)?;
-                    self.expect(TokenKind::KeywordCtx)?;
-
-                    if self.cursor.check(&TokenKind::OperatorColon) {
-                        self.cursor.advance();
-                        self.expect(TokenKind::Identifier)?;
-                    }
-
-                    self.expect(TokenKind::ParenRight)?;
-                    self.expect(TokenKind::OperatorArrow)?;
-
-                    let rewrite = self.parse_permission_expression()?;
-
-                    let relation = Relation {
-                        name: permission_name,
-                        relation_type: Arc::new(Vec::new()),
-                        subject_set_rewrite: Some(Arc::new(rewrite)),
-                    };
-                    relations.push(relation);
-                }
-                TokenKind::SemiColon => {
-                    self.cursor.advance();
-                }
-                _ => {
-                    return Err(ParserError::fatal(
-                        "expected permission name or '}'",
-                        Some(token),
-                    ));
-                }
+        while !self.cursor.is_at_end() || !self.check(TokenKind::BraceRight) {
+            if self.check(TokenKind::Identifier) || self.check(TokenKind::StringLiteral) {
+                // Parse permission rule
+                relations.push(self.parse_permission_rule()?);
+            } else if self.check(TokenKind::SemiColon) {
+                // Skip semicolons
+                continue;
+            } else {
+                return Err(ParserError::new(
+                    "expected permission name or '}'",
+                    self.cursor.peek(),
+                ));
             }
         }
 
-        Err(ParserError::fatal(
-            "Unexpected end of input while parsing 'permits' block",
-            None,
-        ))
+        // Consume closing brace
+        self.consume(TokenKind::BraceRight)?;
+
+        Ok(relations)
     }
 
-    fn parse_permission_expression(&mut self) -> Result<SubjectSetRewrite, ParserError> {
-        let mut root_operation = Operator::And;
-        let mut children = Vec::new();
-        let mut expect_expression = true;
+    fn parse_permission_rule(&mut self) -> Result<Relation, ParserError> {
+        // Parses a single permission rule
+        // Example:
+        // ```
+        // edit: (ctx) => this.related.owner.includes(ctx.subject) || this.related.editors.includes(ctx.subject);
+        // ```
+        let name = if self.check(TokenKind::StringLiteral) {
+            let token = self
+                .cursor
+                .advance()
+                .ok_or(ParserError::new("unexpected end of file", None))?;
+            token.value.clone()
+        } else {
+            self.consume_identifier()?
+        };
 
-        while !self.cursor.is_at_end() {
-            let token = match self.cursor.peek() {
-                Some(token) => token,
-                None => break,
-            };
+        self.consume(TokenKind::OperatorColon)?;
+        self.parse_context_parameter()?;
+        self.consume(TokenKind::OperatorArrow)?;
 
-            match token.kind {
-                TokenKind::ParenLeft if expect_expression => {
-                    self.cursor.advance();
-                    let child_rewrite = self.parse_permission_expression()?;
-                    children.push(Child::Rewrite {
-                        rewrite: Arc::new(child_rewrite),
-                    });
-                    expect_expression = false
-                }
-                _ => todo!(),
-            }
+        let expression = self.parse_expression()?;
+
+        self.consume(TokenKind::SemiColon);
+
+        Ok(Relation {
+            name,
+            relation_type: Arc::new(Vec::new()),
+            subject_set_rewrite: Some(Arc::new(expression)),
+        })
+    }
+
+    fn parse_context_parameter(&mut self) -> Result<(), ParserError> {
+        // Parses the context parameter of a permission rule
+        // Examples:
+        // ```
+        // (ctx)
+        // (ctx: Context)
+        // ```
+        self.consume(TokenKind::ParenLeft)?;
+        self.consume(TokenKind::KeywordCtx)?;
+
+        // Optional type annotation
+        if self.check(TokenKind::OperatorColon) {
+            self.cursor.advance();
+            self.consume_identifier()?; // Skip type name (Context)
         }
 
+        self.consume(TokenKind::ParenRight)?;
+
+        // Optional return type
+        if self.check(TokenKind::OperatorColon) {
+            self.cursor.advance();
+            self.consume_identifier()?; // Skip return type
+        }
+
+        Ok(())
+    }
+
+    //---------------------------
+    // Permission parsing
+    //---------------------------
+
+    fn parse_expression(&mut self) -> Result<SubjectSetRewrite, ParserError> {
         todo!()
     }
 
-    fn parser_simple_permission_expression(&mut self) -> Result<Child, ParserError> {
+    fn parse_logical_or(&mut self) -> Result<SubjectSetRewrite, ParserError> {
         todo!()
     }
 
-    fn parse_property_access(&mut self) -> Result<Child, ParserError> {
+    fn parse_logical_and(&mut self) -> Result<SubjectSetRewrite, ParserError> {
         todo!()
     }
 
-    fn parse_tuple_to_subject_set(&mut self) -> Result<Child, ParserError> {
+    fn parse_unary(&mut self) -> Result<SubjectSetRewrite, ParserError> {
         todo!()
     }
 
-    fn parse_computed_subject_set(&mut self) -> Result<Child, ParserError> {
+    fn parse_primary(&mut self) -> Result<SubjectSetRewrite, ParserError> {
+        todo!()
+    }
+
+    fn parse_simple_expression(&mut self) -> Result<SubjectSetRewrite, ParserError> {
+        todo!()
+    }
+
+    fn parse_related_expression(&mut self) -> Result<SubjectSetRewrite, ParserError> {
+        todo!()
+    }
+
+    fn parse_includes_expression(&mut self) -> Result<SubjectSetRewrite, ParserError> {
+        todo!()
+    }
+
+    fn parse_traverse_expression(&mut self) -> Result<SubjectSetRewrite, ParserError> {
+        todo!()
+    }
+
+    fn parse_permits_expression(&mut self) -> Result<SubjectSetRewrite, ParserError> {
+        todo!()
+    }
+
+    fn parse_property_name(&mut self) -> Result<SubjectSetRewrite, ParserError> {
         todo!()
     }
 }
