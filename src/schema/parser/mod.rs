@@ -467,46 +467,305 @@ impl<'a> SchemaParser<'a> {
     //---------------------------
 
     fn parse_expression(&mut self) -> Result<SubjectSetRewrite, ParserError> {
-        todo!()
+        // Entry point for parsing permission expression
+        // Example:
+        // ```ignore
+        // this.related.owner.includes(ctx.subject) || this.related.editor.includes(ctx.subject)
+        // ```
+        self.parse_logical_or()
     }
 
     fn parse_logical_or(&mut self) -> Result<SubjectSetRewrite, ParserError> {
-        todo!()
+        // Parse OR expression with precedence over AND
+        // Example:
+        // ```ignore
+        // A || B || C
+        // ```
+        let mut expr = self.parse_logical_and()?;
+
+        while self.check(TokenKind::OperatorOr) {
+            let right = self.parse_logical_and()?;
+
+            // Create a new OR expression with left and right as children
+            let mut children = Vec::new();
+
+            if expr.operation.eq(&Operator::Or) {
+                for child in expr.children.iter() {
+                    children.push(child.clone());
+                }
+            } else {
+                children.push(Child::Rewrite {
+                    rewrite: Arc::new(expr.clone()),
+                });
+            }
+
+            if right.operation.eq(&Operator::Or) {
+                for child in right.children.iter() {
+                    children.push(child.clone());
+                }
+            } else {
+                children.push(Child::Rewrite {
+                    rewrite: Arc::new(right),
+                });
+            }
+
+            expr = SubjectSetRewrite {
+                operation: Operator::Or,
+                children: Arc::new(children),
+            };
+        }
+
+        Ok(expr)
     }
 
     fn parse_logical_and(&mut self) -> Result<SubjectSetRewrite, ParserError> {
-        todo!()
+        let mut expr = self.parse_unary()?;
+
+        while self.check(TokenKind::OperatorAnd) {
+            let right = self.parse_unary()?;
+
+            let mut children = Vec::new();
+
+            if expr.operation.eq(&Operator::And) {
+                for child in expr.children.iter() {
+                    children.push(child.clone());
+                }
+            } else {
+                children.push(Child::Rewrite {
+                    rewrite: Arc::new(expr.clone()),
+                });
+            }
+
+            if right.operation.eq(&Operator::And) {
+                for child in right.children.iter() {
+                    children.push(child.clone());
+                }
+            } else {
+                children.push(Child::Rewrite {
+                    rewrite: Arc::new(right.clone()),
+                });
+            }
+            expr = SubjectSetRewrite {
+                operation: Operator::And,
+                children: Arc::new(children),
+            }
+        }
+
+        Ok(expr)
     }
 
     fn parse_unary(&mut self) -> Result<SubjectSetRewrite, ParserError> {
-        todo!()
+        // Parses unary expression
+        if self.check(TokenKind::OperatorNot) {
+            let expr = self.parse_primary()?;
+
+            // Create negated expression
+            let child_to_negate = Child::Rewrite {
+                rewrite: Arc::new(expr.clone()),
+            };
+
+            let negated_child = Child::InvertResult {
+                child: Arc::new(child_to_negate),
+            };
+
+            return Ok(SubjectSetRewrite {
+                operation: Operator::And,
+                children: Arc::new(vec![negated_child]),
+            });
+        }
+
+        // Not a negation, parse a primary expression
+        self.parse_primary()
     }
 
     fn parse_primary(&mut self) -> Result<SubjectSetRewrite, ParserError> {
-        todo!()
+        if self.check(TokenKind::ParenLeft) {
+            let expr = self.parse_expression()?;
+            self.consume(TokenKind::ParenRight)?;
+            return Ok(expr);
+        }
+
+        self.parse_simple_expression()
     }
 
     fn parse_simple_expression(&mut self) -> Result<SubjectSetRewrite, ParserError> {
-        todo!()
+        self.consume(TokenKind::KeywordThis)?;
+        self.consume(TokenKind::OperatorDot)?;
+
+        let verb = self.consume_identifier()?;
+
+        match verb.as_ref() {
+            "related" => self.parse_related_expression(),
+            "permits" => self.parse_permits_expression(),
+            _ => Err(ParserError::new(
+                format!("expected 'related' or 'permits', found {}", verb),
+                self.cursor.peek(),
+            )),
+        }
     }
 
     fn parse_related_expression(&mut self) -> Result<SubjectSetRewrite, ParserError> {
-        todo!()
+        let relation_name = self.parse_property_name()?;
+
+        if !self.check(TokenKind::OperatorDot) {
+            let attribute = Child::AttributeReference {
+                relation: relation_name,
+            };
+            return Ok(SubjectSetRewrite {
+                operation: Operator::And,
+                children: Arc::new(vec![attribute]),
+            });
+        }
+
+        self.consume(TokenKind::OperatorDot)?;
+        let method = self.consume_identifier()?;
+
+        match method.as_ref() {
+            "includes" => self.parse_includes_expression(relation_name),
+            "traverse" => self.parse_traverse_expression(relation_name),
+            _ => Err(ParserError::new(
+                format!("expected 'includes'  or 'traverse' found, {}", method),
+                self.cursor.peek(),
+            )),
+        }
     }
 
-    fn parse_includes_expression(&mut self) -> Result<SubjectSetRewrite, ParserError> {
-        todo!()
+    fn parse_includes_expression(
+        &mut self,
+        relation: Arc<str>,
+    ) -> Result<SubjectSetRewrite, ParserError> {
+        self.consume(TokenKind::ParenLeft)?;
+        self.consume(TokenKind::KeywordCtx)?;
+        self.consume(TokenKind::OperatorDot)?;
+        self.consume_identifier()?;
+        self.consume(TokenKind::ParenRight)?;
+
+        let computed_set = Child::ComputerSubjectSet { relation };
+
+        Ok(SubjectSetRewrite {
+            operation: Operator::And,
+            children: Arc::new(vec![computed_set]),
+        })
     }
 
-    fn parse_traverse_expression(&mut self) -> Result<SubjectSetRewrite, ParserError> {
-        todo!()
+    fn parse_traverse_expression(
+        &mut self,
+        relation: Arc<str>,
+    ) -> Result<SubjectSetRewrite, ParserError> {
+        self.consume(TokenKind::ParenLeft)?;
+
+        let param_name = self.consume_identifier()?;
+
+        self.consume(TokenKind::OperatorArrow)?;
+
+        let param_ref = self.consume_identifier()?;
+        if param_ref.as_ref().ne(param_name.as_ref()) {
+            return Err(ParserError::new(
+                format!("expected reference to parameter '{}'", param_name),
+                self.cursor.peek(),
+            ));
+        }
+
+        self.consume(TokenKind::OperatorDot)?;
+        let verb = self.consume_identifier()?;
+
+        let target_relation = match verb.as_ref() {
+            "related" => {
+                let rel_name = self.parse_property_name()?;
+                self.consume(TokenKind::OperatorDot)?;
+                self.consume_identifier()?;
+
+                self.consume(TokenKind::ParenLeft)?;
+                self.consume(TokenKind::KeywordCtx)?;
+                self.consume(TokenKind::OperatorDot)?;
+                self.consume_identifier()?;
+                self.consume(TokenKind::ParenRight)?;
+
+                rel_name
+            }
+            "permits" => {
+                let rel_name = self.parse_property_name()?;
+
+                self.consume(TokenKind::ParenLeft)?;
+                self.consume(TokenKind::KeywordCtx)?;
+                self.consume(TokenKind::ParenRight)?;
+
+                rel_name
+            }
+            _ => {
+                return Err(ParserError::new(
+                    format!("expected 'related' or 'permits', found {}", verb),
+                    self.cursor.peek(),
+                ));
+            }
+        };
+
+        self.consume(TokenKind::ParenRight)?;
+
+        let tuple_to_set = Child::TupleToSubjectSet {
+            relation,
+            computed_subject_set_relation: target_relation,
+        };
+
+        Ok(SubjectSetRewrite {
+            operation: Operator::And,
+            children: Arc::new(vec![tuple_to_set]),
+        })
     }
 
     fn parse_permits_expression(&mut self) -> Result<SubjectSetRewrite, ParserError> {
-        todo!()
+        let relation_name = self.parse_property_name()?;
+
+        self.consume(TokenKind::ParenLeft)?;
+        self.consume(TokenKind::KeywordCtx)?;
+        self.consume(TokenKind::ParenRight)?;
+
+        let computed_set = Child::ComputerSubjectSet {
+            relation: relation_name,
+        };
+
+        Ok(SubjectSetRewrite {
+            operation: Operator::And,
+            children: Arc::new(vec![computed_set]),
+        })
     }
 
-    fn parse_property_name(&mut self) -> Result<SubjectSetRewrite, ParserError> {
-        todo!()
+    fn parse_property_name(&mut self) -> Result<Arc<str>, ParserError> {
+        if self.check(TokenKind::BraceLeft) {
+            self.cursor.advance();
+
+            let name_token = self
+                .cursor
+                .peek()
+                .ok_or(ParserError::new("expected property name", None))?;
+
+            if name_token.kind.ne(&TokenKind::Identifier)
+                && name_token.kind.ne(&TokenKind::StringLiteral)
+            {
+                return Err(ParserError::new("expected property name", Some(name_token)));
+            }
+
+            let name = name_token.value.clone();
+            self.cursor.advance();
+            self.consume(TokenKind::BracketRight)?;
+            Ok(name)
+        } else {
+            self.consume(TokenKind::OperatorDot)?;
+
+            let name_token = self
+                .cursor
+                .peek()
+                .ok_or(ParserError::new("expected property name", None))?;
+
+            if name_token.kind.ne(&TokenKind::StringLiteral)
+                && name_token.kind.ne(&TokenKind::Identifier)
+            {
+                return Err(ParserError::new("expected property name", Some(name_token)));
+            }
+
+            let name = name_token.value.clone();
+            self.cursor.advance();
+            Ok(name)
+        }
     }
 }
