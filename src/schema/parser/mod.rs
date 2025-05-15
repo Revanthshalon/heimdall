@@ -37,7 +37,7 @@ impl<'a> SchemaParser<'a> {
     pub fn parse(&mut self) -> Result<Schema, Vec<ParserError>> {
         // Entry point for parsing an entire schema file
         // Example:
-        // ```
+        // ```ignore
         // class User implements Namespace {...}
         // class Document implements Namespace {...}
         // ```
@@ -106,7 +106,7 @@ impl<'a> SchemaParser<'a> {
     fn parse_namespace(&mut self) -> Result<Namespace, ParserError> {
         // Parses a single namespace definition
         // Example:
-        // ```
+        // ```ignore
         // class User implements Namespace {
         //   related: { ... }
         //   permits: { ... }
@@ -149,7 +149,7 @@ impl<'a> SchemaParser<'a> {
     //---------------------------
 
     /// Parses a related block which defines relations and attributes
-    /// ```
+    /// ```ignore
     /// related: {
     ///     owner: User[];
     ///     editors: (User | Team)[];
@@ -183,7 +183,7 @@ impl<'a> SchemaParser<'a> {
     fn parse_relation_definitions(&mut self) -> Result<Relation, ParserError> {
         // Parses a single relation or attribute definition
         // Example:
-        // ```
+        // ```ignore
         // owner: User[];
         // confidential: boolean;
         // ```
@@ -213,7 +213,7 @@ impl<'a> SchemaParser<'a> {
     fn parse_relation_type(&mut self) -> Result<Vec<RelationType>, ParserError> {
         // Parses the type definition for a relation
         // Example:
-        // ```
+        // ```ignore
         // User[]                           -> Namespace Reference
         // boolean                          -> Primitive Attribute
         // (User | Team) []                 -> Type union
@@ -267,7 +267,7 @@ impl<'a> SchemaParser<'a> {
     fn parse_subject_set_type(&mut self) -> Result<Vec<RelationType>, ParserError> {
         // Parsers a subject set type reference
         // Example:
-        // ```
+        // ```ignore
         // SubjectSet<Team, "members">[]
         // ```
         self.consume(TokenKind::AngledLeft)?;
@@ -305,7 +305,7 @@ impl<'a> SchemaParser<'a> {
     fn parse_type_union(&mut self) -> Result<Vec<RelationType>, ParserError> {
         // Parses a type union expression
         // Example:
-        // ```
+        // ```ignore
         // (User | Team | SubjectSet<Group, "members">)
         // ```
         let mut types = Vec::new();
@@ -375,7 +375,7 @@ impl<'a> SchemaParser<'a> {
     fn parse_permits_block(&mut self) -> Result<Vec<Relation>, ParserError> {
         // Entry point for parsing permission expressions
         // Example:
-        // ```
+        // ```ignore
         // this.related.owner.includes(ctx.subject) || this.related.editors.includes(ctx.subject)
         // ```
         self.consume(TokenKind::OperatorColon)?;
@@ -407,7 +407,7 @@ impl<'a> SchemaParser<'a> {
     fn parse_permission_rule(&mut self) -> Result<Relation, ParserError> {
         // Parses a single permission rule
         // Example:
-        // ```
+        // ```ignore
         // edit: (ctx) => this.related.owner.includes(ctx.subject) || this.related.editors.includes(ctx.subject);
         // ```
         let name = if self.check(TokenKind::StringLiteral) {
@@ -438,7 +438,7 @@ impl<'a> SchemaParser<'a> {
     fn parse_context_parameter(&mut self) -> Result<(), ParserError> {
         // Parses the context parameter of a permission rule
         // Examples:
-        // ```
+        // ```ignore
         // (ctx)
         // (ctx: Context)
         // ```
