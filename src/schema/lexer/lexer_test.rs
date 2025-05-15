@@ -217,3 +217,25 @@ fn test_tokenize() {
     assert!(tokens[10].kind.eq(&TokenKind::SemiColon));
     assert!(tokens[11].kind.eq(&TokenKind::BraceRight));
 }
+
+#[test]
+fn test_keyword() {
+    let lex = Lexer::new("");
+
+    // Test all keywords
+    let keywords = [
+        ("class", TokenKind::KeywordClass),
+        ("implements", TokenKind::KeywordImplements),
+        ("related", TokenKind::KeywordRelated),
+        ("Namespace", TokenKind::KeywordNamespace),
+        ("permits", TokenKind::KeywordPermits),
+        ("this", TokenKind::KeywordThis),
+        ("ctx", TokenKind::KeywordCtx),
+    ];
+
+    for (keyword, expected_kind) in keywords {
+        let input = Span::new(keyword);
+        let (_, token) = lex.lex_keyword(input).unwrap();
+        assert!(token.kind.eq(&expected_kind));
+    }
+}
