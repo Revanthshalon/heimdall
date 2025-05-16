@@ -17,6 +17,7 @@ use crate::{
 use super::token::{Token, kind::TokenKind};
 
 mod cursor;
+mod parser_test;
 
 pub const TUPLE_TO_SUBJECT_SET_TYPE_CHECK_MAX_DEPTH: usize = 10;
 pub const EXPRESSION_NESTING_MAX_DEPTH: usize = 10;
@@ -44,7 +45,15 @@ impl<'a> SchemaParser<'a> {
         let mut namespaces = Vec::new();
 
         while !self.cursor.is_at_end() {
-            todo!()
+            if self.check(TokenKind::KeywordClass) {
+                match self.parse_namespace() {
+                    Ok(namespace) => namespaces.push(namespace),
+                    Err(e) => self.errors.push(e),
+                }
+            } else {
+                // Skip tokens that are not a part of namespace definition
+                self.cursor.advance();
+            }
         }
 
         if !self.errors.is_empty() {
@@ -75,7 +84,7 @@ impl<'a> SchemaParser<'a> {
                 .ok_or(ParserError::new("unexpected end of file", None))?)
         } else {
             Err(ParserError::new(
-                format!("expected {:?}", kind),
+                format!("expected {:?}, found {:?}", kind, self.cursor.peek()),
                 self.cursor.peek(),
             ))
         }
@@ -164,17 +173,20 @@ impl<'a> SchemaParser<'a> {
 
         while !self.cursor.is_at_end() && !self.check(TokenKind::BraceRight) {
             if self.check(TokenKind::Identifier) || self.check(TokenKind::StringLiteral) {
+                // Parse relation definition
                 relations.push(self.parse_relation_definitions()?);
             } else if self.check(TokenKind::SemiColon) {
+                // Skip semicolons
                 continue;
             } else {
                 return Err(ParserError::new(
-                    "expected relation name",
+                    "expected relation name or '}'",
                     self.cursor.peek(),
                 ));
             }
         }
 
+        // Consume closing brace
         self.consume(TokenKind::BraceRight)?;
 
         Ok(relations)
@@ -255,6 +267,7 @@ impl<'a> SchemaParser<'a> {
             }
         } else if self.check(TokenKind::ParenLeft) {
             // Union type like (User | Team)[]
+            self.consume(TokenKind::ParenLeft)?;
             return self.parse_type_union();
         }
 
@@ -293,8 +306,8 @@ impl<'a> SchemaParser<'a> {
 
         self.consume(TokenKind::AngledRight)?;
 
-        self.consume(TokenKind::BracketLeft)?;
-        self.consume(TokenKind::BracketRight)?;
+        self.consume(TokenKind::BracketLeft);
+        self.consume(TokenKind::BracketRight);
 
         Ok(vec![RelationType::Reference {
             namespace,
@@ -315,12 +328,13 @@ impl<'a> SchemaParser<'a> {
                 .cursor
                 .advance()
                 .ok_or(ParserError::new("unexpected end of file", None))?;
+
             match token.value.as_ref() {
                 "SubjectSet" => {
                     types.extend(self.parse_subject_set_type()?);
                 }
                 _ => {
-                    let namespace = self.consume_identifier()?;
+                    let namespace = token.value.clone();
                     types.push(RelationType::Reference {
                         namespace,
                         relation: None,
@@ -329,12 +343,13 @@ impl<'a> SchemaParser<'a> {
             }
         } else {
             return Err(ParserError::new(
-                "expected type in union",
+                format!("expected type in union, {:?}", self.cursor.peek()),
                 self.cursor.peek(),
             ));
         }
 
         while self.check(TokenKind::TypeUnion) {
+            self.consume(TokenKind::TypeUnion)?;
             if self.check(TokenKind::Identifier) {
                 let token = self
                     .cursor
@@ -345,7 +360,7 @@ impl<'a> SchemaParser<'a> {
                         types.extend(self.parse_subject_set_type()?);
                     }
                     _ => {
-                        let namespace = self.consume_identifier()?;
+                        let namespace = token.value.clone();
                         types.push(RelationType::Reference {
                             namespace,
                             relation: None,
@@ -592,7 +607,13 @@ impl<'a> SchemaParser<'a> {
         self.consume(TokenKind::KeywordThis)?;
         self.consume(TokenKind::OperatorDot)?;
 
-        let verb = self.consume_identifier()?;
+        let verb = if self.check(TokenKind::KeywordRelated) {
+            self.consume(TokenKind::KeywordRelated)?.value.clone()
+        } else if self.check(TokenKind::KeywordPermits) {
+            self.consume(TokenKind::KeywordPermits)?.value.clone()
+        } else {
+            self.consume_identifier()?
+        };
 
         match verb.as_ref() {
             "related" => self.parse_related_expression(),
