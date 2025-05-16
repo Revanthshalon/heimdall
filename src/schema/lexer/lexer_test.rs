@@ -28,7 +28,7 @@ fn test_operator() {
     // Test ARROW operator
     let input = Span::new("=>");
     let (_, token) = lex.lex_operator(input).unwrap();
-    assert!(token.kind.eq(&TokenKind::OperatorAssign));
+    assert!(token.kind.eq(&TokenKind::OperatorArrow));
 
     // Test DOT operator
     let input = Span::new(".");
