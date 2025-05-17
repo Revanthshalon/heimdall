@@ -142,7 +142,10 @@ impl<'a> SchemaParser<'a> {
                 relations.extend(permits_relations);
             } else {
                 return Err(ParserError::new(
-                    "expected 'related' or 'permits' or '}'",
+                    format!(
+                        "expected 'related' or 'permits' or '}}', found {:?}",
+                        self.cursor.peek()
+                    ),
                     self.cursor.peek(),
                 ));
             }
@@ -177,6 +180,7 @@ impl<'a> SchemaParser<'a> {
                 relations.push(self.parse_relation_definitions()?);
             } else if self.check(TokenKind::SemiColon) {
                 // Skip semicolons
+                self.cursor.advance();
                 continue;
             } else {
                 return Err(ParserError::new(
@@ -238,6 +242,7 @@ impl<'a> SchemaParser<'a> {
                 .ok_or(ParserError::new("unexpected end of file", None))?;
 
             match token.value.as_ref() {
+                // Simple Relation Type
                 "boolean" => {
                     self.cursor.advance();
                     return Ok(vec![RelationType::Attribute(AttributeType::Boolean)]);
@@ -272,7 +277,7 @@ impl<'a> SchemaParser<'a> {
         }
 
         Err(ParserError::new(
-            "expected type definition",
+            format!("expected type definition, found {:?}", self.cursor.peek()),
             self.cursor.peek(),
         ))
     }
@@ -299,7 +304,7 @@ impl<'a> SchemaParser<'a> {
             token.value.clone()
         } else {
             return Err(ParserError::new(
-                "expected relation name",
+                format!("expected relation name, {:?}", self.cursor.peek()),
                 self.cursor.peek(),
             ));
         };
@@ -324,10 +329,7 @@ impl<'a> SchemaParser<'a> {
         let mut types = Vec::new();
 
         if self.check(TokenKind::Identifier) {
-            let token = self
-                .cursor
-                .advance()
-                .ok_or(ParserError::new("unexpected end of file", None))?;
+            let token = self.consume(TokenKind::Identifier)?;
 
             match token.value.as_ref() {
                 "SubjectSet" => {
@@ -349,7 +351,7 @@ impl<'a> SchemaParser<'a> {
         }
 
         while self.check(TokenKind::TypeUnion) {
-            self.consume(TokenKind::TypeUnion)?;
+            self.cursor.advance();
             if self.check(TokenKind::Identifier) {
                 let token = self
                     .cursor
@@ -398,16 +400,17 @@ impl<'a> SchemaParser<'a> {
 
         let mut relations = Vec::new();
 
-        while !self.cursor.is_at_end() || !self.check(TokenKind::BraceRight) {
+        while !self.cursor.is_at_end() && !self.check(TokenKind::BraceRight) {
             if self.check(TokenKind::Identifier) || self.check(TokenKind::StringLiteral) {
                 // Parse permission rule
                 relations.push(self.parse_permission_rule()?);
             } else if self.check(TokenKind::SemiColon) {
                 // Skip semicolons
+                self.cursor.advance();
                 continue;
             } else {
                 return Err(ParserError::new(
-                    "expected permission name or '}'",
+                    format!("expected permission name or '}}', {:?}", self.cursor.peek()),
                     self.cursor.peek(),
                 ));
             }
@@ -441,7 +444,10 @@ impl<'a> SchemaParser<'a> {
 
         let expression = self.parse_expression()?;
 
-        self.consume(TokenKind::SemiColon);
+        // Check for optional semicolon
+        if self.check(TokenKind::SemiColon) {
+            self.cursor.advance();
+        }
 
         Ok(Relation {
             name,
@@ -499,6 +505,7 @@ impl<'a> SchemaParser<'a> {
         let mut expr = self.parse_logical_and()?;
 
         while self.check(TokenKind::OperatorOr) {
+            self.cursor.advance();
             let right = self.parse_logical_and()?;
 
             // Create a new OR expression with left and right as children
@@ -537,6 +544,7 @@ impl<'a> SchemaParser<'a> {
         let mut expr = self.parse_unary()?;
 
         while self.check(TokenKind::OperatorAnd) {
+            self.cursor.advance();
             let right = self.parse_unary()?;
 
             let mut children = Vec::new();
@@ -572,6 +580,8 @@ impl<'a> SchemaParser<'a> {
     fn parse_unary(&mut self) -> Result<SubjectSetRewrite, ParserError> {
         // Parses unary expression
         if self.check(TokenKind::OperatorNot) {
+            self.cursor.advance();
+
             let expr = self.parse_primary()?;
 
             // Create negated expression
@@ -595,6 +605,8 @@ impl<'a> SchemaParser<'a> {
 
     fn parse_primary(&mut self) -> Result<SubjectSetRewrite, ParserError> {
         if self.check(TokenKind::ParenLeft) {
+            self.cursor.advance();
+
             let expr = self.parse_expression()?;
             self.consume(TokenKind::ParenRight)?;
             return Ok(expr);
@@ -675,7 +687,12 @@ impl<'a> SchemaParser<'a> {
     ) -> Result<SubjectSetRewrite, ParserError> {
         self.consume(TokenKind::ParenLeft)?;
 
+        // Handle optional extra parenthesis
+        self.consume(TokenKind::ParenLeft);
+
         let param_name = self.consume_identifier()?;
+
+        self.consume(TokenKind::ParenRight);
 
         self.consume(TokenKind::OperatorArrow)?;
 
@@ -688,7 +705,27 @@ impl<'a> SchemaParser<'a> {
         }
 
         self.consume(TokenKind::OperatorDot)?;
-        let verb = self.consume_identifier()?;
+
+        let verb = if self.check(TokenKind::KeywordPermits) {
+            self.cursor
+                .advance()
+                .ok_or(ParserError::new("expected permits", self.cursor.peek()))?
+                .value
+                .clone()
+        } else if self.check(TokenKind::KeywordRelated) {
+            self.cursor
+                .advance()
+                .ok_or(ParserError::new("expected related", self.cursor.peek()))?
+                .value
+                .clone()
+        } else if self.check(TokenKind::Identifier) {
+            self.consume_identifier()?
+        } else {
+            return Err(ParserError::new(
+                "Expected 'related' or 'permits'",
+                self.cursor.peek(),
+            ));
+        };
 
         let target_relation = match verb.as_ref() {
             "related" => {
@@ -752,7 +789,7 @@ impl<'a> SchemaParser<'a> {
     }
 
     fn parse_property_name(&mut self) -> Result<Arc<str>, ParserError> {
-        if self.check(TokenKind::BraceLeft) {
+        if self.check(TokenKind::BracketLeft) {
             self.cursor.advance();
 
             let name_token = self
