@@ -29,14 +29,14 @@ class Document implements Namespace {
     edit: (ctx: Context) => 
       this.related.owner.includes(ctx.subject) || 
       this.related.editors.includes(ctx.subject) ||
-      this.related.parent_folder.related.traverse((parent) => 
+      this.related.parent_folder.traverse(parent => 
         parent.permits.edit(ctx)
       );
 
     view: (ctx) => 
       this.permits.edit(ctx) || 
       this.related.viewers.includes(ctx.subject) ||
-      this.related.parent_folder.related.traverse((parent) => 
+      this.related.parent_folder.traverse((parent) => 
         parent.permits.view(ctx)
       );
 

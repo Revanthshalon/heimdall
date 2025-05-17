@@ -1,0 +1,322 @@
+Schema {
+  namespaces: [
+    Namespace {
+      name: "User",
+      relations: [
+        Relation {
+          name: "manager",
+          relation_type: [
+            Reference {
+              namespace: "User",
+              relation: None
+            }
+          ],
+          subject_set_rewrite: None
+        },
+        Relation {
+          name: "teams",
+          relation_type: [
+            Reference {
+              namespace: "Team",
+              relation: None
+            }
+          ],
+          subject_set_rewrite: None
+        }
+      ]
+    },
+    Namespace {
+      name: "Team",
+      relations: [
+        Relation {
+          name: "members",
+          relation_type: [
+            Reference {
+              namespace: "User",
+              relation: None
+            },
+            Reference {
+              namespace: "Team",
+              relation: None
+            }
+          ],
+          subject_set_rewrite: None
+        },
+        Relation {
+          name: "parent",
+          relation_type: [
+            Reference {
+              namespace: "Team",
+              relation: None
+            }
+          ],
+          subject_set_rewrite: None
+        },
+        Relation {
+          name: "active",
+          relation_type: [
+            Attribute(Boolean)
+          ],
+          subject_set_rewrite: None
+        }
+      ]
+    },
+    Namespace {
+      name: "Document",
+      relations: [
+        Relation {
+          name: "owner",
+          relation_type: [
+            Reference {
+              namespace: "User",
+              relation: None
+            }
+          ],
+          subject_set_rewrite: None
+        },
+        Relation {
+          name: "editors",
+          relation_type: [
+            Reference {
+              namespace: "User",
+              relation: None
+            }
+          ],
+          subject_set_rewrite: None
+        },
+        Relation {
+          name: "viewers",
+          relation_type: [
+            Reference {
+              namespace: "User",
+              relation: None
+            },
+            Reference {
+              namespace: "Team",
+              relation: Some("members")
+            }
+          ],
+          subject_set_rewrite: None
+        },
+        Relation {
+          name: "parent_folder",
+          relation_type: [
+            Reference {
+              namespace: "Folder",
+              relation: None
+            }
+          ],
+          subject_set_rewrite: None
+        },
+        Relation {
+          name: "confidential",
+          relation_type: [
+            Attribute(Boolean)
+          ],
+          subject_set_rewrite: None
+        },
+        Relation {
+          name: "edit",
+          relation_type: [],
+          subject_set_rewrite: Some(
+            SubjectSetRewrite {
+              operation: Or,
+              children: [
+                Rewrite {
+                  rewrite: SubjectSetRewrite {
+                    operation: And,
+                    children: [
+                      ComputerSubjectSet {
+                        relation: "owner"
+                      }
+                    ]
+                  }
+                },
+                Rewrite {
+                  rewrite: SubjectSetRewrite {
+                    operation: And,
+                    children: [
+                      ComputerSubjectSet {
+                        relation: "editors"
+                      }
+                    ]
+                  }
+                },
+                Rewrite {
+                  rewrite: SubjectSetRewrite {
+                    operation: And,
+                    children: [
+                      TupleToSubjectSet {
+                        relation: "parent_folder",
+                        computed_subject_set_relation: "edit"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          )
+        },
+        Relation {
+          name: "view",
+          relation_type: [],
+          subject_set_rewrite: Some(
+            SubjectSetRewrite {
+              operation: Or,
+              children: [
+                Rewrite {
+                  rewrite: SubjectSetRewrite {
+                    operation: And,
+                    children: [
+                      ComputerSubjectSet {
+                        relation: "edit"
+                      }
+                    ]
+                  }
+                },
+                Rewrite {
+                  rewrite: SubjectSetRewrite {
+                    operation: And,
+                    children: [
+                      ComputerSubjectSet {
+                        relation: "viewers"
+                      }
+                    ]
+                  }
+                },
+                Rewrite {
+                  rewrite: SubjectSetRewrite {
+                    operation: And,
+                    children: [
+                      TupleToSubjectSet {
+                        relation: "parent_folder",
+                        computed_subject_set_relation: "view"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          )
+        },
+        Relation {
+          name: "share",
+          relation_type: [],
+          subject_set_rewrite: Some(
+            SubjectSetRewrite {
+              operation: And,
+              children: [
+                ComputerSubjectSet {
+                  relation: "owner"
+                },
+                InvertResult {
+                  child: Rewrite {
+                    rewrite: SubjectSetRewrite {
+                      operation: And,
+                      children: [
+                        AttributeReference {
+                          relation: "confidential"
+                        }
+                      ]
+                    }
+                  }
+                }
+              ]
+            }
+          )
+        }
+      ]
+    },
+    Namespace {
+      name: "Folder",
+      relations: [
+        Relation {
+          name: "owner",
+          relation_type: [
+            Reference {
+              namespace: "User",
+              relation: None
+            }
+          ],
+          subject_set_rewrite: None
+        },
+        Relation {
+          name: "editors",
+          relation_type: [
+            Reference {
+              namespace: "Team",
+              relation: Some("members")
+            }
+          ],
+          subject_set_rewrite: None
+        },
+        Relation {
+          name: "admins",
+          relation_type: [
+            Reference {
+              namespace: "User",
+              relation: None
+            }
+          ],
+          subject_set_rewrite: None
+        },
+        Relation {
+          name: "edit",
+          relation_type: [],
+          subject_set_rewrite: Some(
+            SubjectSetRewrite {
+              operation: Or,
+              children: [
+                Rewrite {
+                  rewrite: SubjectSetRewrite {
+                    operation: And,
+                    children: [
+                      ComputerSubjectSet {
+                        relation: "owner"
+                      }
+                    ]
+                  }
+                },
+                Rewrite {
+                  rewrite: SubjectSetRewrite {
+                    operation: And,
+                    children: [
+                      ComputerSubjectSet {
+                        relation: "editors"
+                      }
+                    ]
+                  }
+                },
+                Rewrite {
+                  rewrite: SubjectSetRewrite {
+                    operation: And,
+                    children: [
+                      ComputerSubjectSet {
+                        relation: "admins"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          )
+        },
+        Relation {
+          name: "view",
+          relation_type: [],
+          subject_set_rewrite: Some(
+            SubjectSetRewrite {
+              operation: And,
+              children: [
+                ComputerSubjectSet {
+                  relation: "edit"
+                }
+              ]
+            }
+          )
+        }
+      ]
+    }
+  ]
+}
+
